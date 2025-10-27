@@ -1,0 +1,281 @@
+{
+  "name": "My workflow 4",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "={{ $json[\"link\"] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        256,
+        -1232
+      ],
+      "id": "5e5d8d89-9540-4774-a691-46e570ae9185",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "https://wesh.ir/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -96,
+        -896
+      ],
+      "id": "526eb62c-a4c1-49b4-a5e3-e8ee66eb6bcd",
+      "name": "RSS Read"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "title",
+              "cssSelector": "title"
+            },
+            {
+              "key": "content",
+              "cssSelector": "div.elementor-widget-container p"
+            },
+            {
+              "key": "imageUrl",
+              "cssSelector": "img.wp-image-4813",
+              "returnValue": "attribute",
+              "attribute": "src"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        384,
+        -896
+      ],
+      "id": "e4d98a87-78ec-44ed-96de-1686df7243de",
+      "name": "HTML"
+    },
+    {
+      "parameters": {
+        "jsCode": "const title = $input.first().json.title || 'بدون عنوان';\nconst content = decodeURIComponent($input.first().json.content || '');\nconst link = $input.first().json.link || '';\n\n// ساخت متن خلاصه‌سازی\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف):\\n\\n${content}`;\n\nreturn [{\n  json: {\n    prompt,\n    originalTitle: title,\n    link,\n    imageUrl: $input.first().json.imageUrl || ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -1248
+      ],
+      "id": "3bfee3de-94de-42c0-a421-a4b7aada4e38",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "-1003140416257",
+        "file": "{{ $json.photo }}",
+        "additionalFields": {
+          "caption": "{{ $json.caption }}"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        -1088
+      ],
+      "id": "9a2c38e8-9179-4f29-b5e8-edc751f56354",
+      "name": "Send a photo message",
+      "webhookId": "0f87e073-af12-400a-906e-6b55dfca20c7",
+      "credentials": {
+        "telegramApi": {
+          "id": "w3HIcBgC88omBsJ7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || '';\nconst summary = parsedData.summary || '';\nconst imageUrl = parsedData.imageUrl || '';\nconst link = parsedData.link || '';\n\n// ساخت پیام با فرمت HTML\nconst message = `<b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه خبر</a>`;\n\nreturn [{\n    json: {\n        message: message,\n        imageUrl: imageUrl,\n        hasImage: imageUrl ? true : false\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -1104
+      ],
+      "id": "0d5e5061-2b99-46d3-a507-a84fb7ef6ed5",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtMinute": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -240,
+        -1104
+      ],
+      "id": "52c4a316-39c9-48b7-8cf8-80307ae81243",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyDJvZgrG_jwRm1qGcVW2IPW4qAjIs3Dd4",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"{{ $json.prompt }}\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        -1328
+      ],
+      "id": "903565e5-cc7c-4ac1-aa52-58c1e6d63369",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  try {\n    const decodedLink = decodeURIComponent(item.json.link);\n    return { json: { ...item.json, link: decodedLink } };\n  } catch (e) {\n    return item;\n  }\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        -1312
+      ],
+      "id": "b50ae6bf-8bb5-4280-9aa9-da09e91d0956",
+      "name": "Code in JavaScript3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a photo message": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Send a photo message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "532ee310-11b6-4ebb-9e1f-000f7060cd8f",
+  "meta": {
+    "instanceId": "e9ab7552981b4061a4ecd9f94dfb88c0d9ea8398e961467ddb816643976354e1"
+  },
+  "id": "2oVqZwqOndyErqhS",
+  "tags": []
+}
