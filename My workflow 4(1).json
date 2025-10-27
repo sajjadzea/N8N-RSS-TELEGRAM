@@ -62,7 +62,7 @@
             },
             {
               "key": "firstLargeImage",
-              "cssSelector": "article img[width]:not([width='1']):not([width='2']):not(.emoji)",
+              "cssSelector": "article.post img, .entry-content img, .elementor-widget-container img, main img",
               "returnValue": "attribute",
               "attribute": "src"
             }
@@ -81,7 +81,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const title = $input.first().json.title || 'بدون عنوان';\nconst content = decodeURIComponent($input.first().json.content || '');\nconst link = $input.first().json.link || '';\n\n// انتخاب بهترین تصویر با اولویت\nconst imageUrl = $input.first().json.ogImage || \n                 $input.first().json.twitterImage || \n                 $input.first().json.featuredImage || \n                 $input.first().json.firstLargeImage || '';\n\n// ساخت متن خلاصه‌سازی با درخواست JSON\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف).\\n\\nمتن خبر:\\n${content}\\n\\nخروجی را حتماً به صورت JSON با فرمت زیر برگردان:\\n{\\n  \"title\": \"${title}\",\\n  \"summary\": \"متن خلاصه شده\",\\n  \"imageUrl\": \"${imageUrl}\",\\n  \"link\": \"${link}\"\\n}`;\n\nreturn [{\n  json: {\n    prompt\n  }\n}];"
+        "jsCode": "const title = $input.first().json.title || 'بدون عنوان';\nconst content = decodeURIComponent($input.first().json.content || '');\nconst link = $input.first().json.link || '';\n\n// تابع بررسی معتبر بودن URL تصویر\nconst isValidImage = (url) => {\n  if (!url) return false;\n  const invalidKeywords = ['aparat', 'icon', 'logo', 'avatar', 'placeholder', 'default'];\n  const urlLower = url.toLowerCase();\n  return !invalidKeywords.some(keyword => urlLower.includes(keyword));\n};\n\n// انتخاب بهترین تصویر با فیلتر\nconst candidates = [\n  $input.first().json.ogImage,\n  $input.first().json.twitterImage,\n  $input.first().json.featuredImage,\n  $input.first().json.firstLargeImage\n];\n\nconst imageUrl = candidates.find(url => isValidImage(url)) || '';\n\n// ساخت متن خلاصه‌سازی با درخواست JSON\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف).\\n\\nمتن خبر:\\n${content}\\n\\nخروجی را حتماً به صورت JSON با فرمت زیر برگردان:\\n{\\n  \"title\": \"${title}\",\\n  \"summary\": \"متن خلاصه شده\",\\n  \"imageUrl\": \"${imageUrl}\",\\n  \"link\": \"${link}\"\\n}`;\n\nreturn [{\n  json: {\n    prompt\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
