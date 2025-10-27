@@ -134,7 +134,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
