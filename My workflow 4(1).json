@@ -56,13 +56,13 @@
             },
             {
               "key": "featuredImage",
-              "cssSelector": "img.wp-post-image, .post-thumbnail img",
+              "cssSelector": "img.attachment-full, img[class*='wp-image-'], img.wp-post-image, .post-thumbnail img",
               "returnValue": "attribute",
               "attribute": "src"
             },
             {
               "key": "firstLargeImage",
-              "cssSelector": "article img:not([width='1']):not([width='2']):not(.emoji)",
+              "cssSelector": "article img[width]:not([width='1']):not([width='2']):not(.emoji)",
               "returnValue": "attribute",
               "attribute": "src"
             }
