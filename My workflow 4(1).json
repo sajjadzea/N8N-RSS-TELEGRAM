@@ -44,7 +44,7 @@
             },
             {
               "key": "imageUrl",
-              "cssSelector": "article img, .entry-content img, .elementor-widget-image img",
+              "cssSelector": ".entry-content img:not(.emoji):not([width=\"1\"]):not([height=\"1\"]), article.post img:first-of-type, .post-thumbnail img, .featured-image img",
               "returnValue": "attribute",
               "attribute": "src"
             }
@@ -80,7 +80,8 @@
         "chatId": "-1003140416257",
         "file": "={{ $json.photo }}",
         "additionalFields": {
-          "caption": "={{ $json.caption }}"
+          "caption": "={{ $json.caption }}",
+          "parse_mode": "HTML"
         }
       },
       "type": "n8n-nodes-base.telegram",
@@ -101,7 +102,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || '';\nconst summary = parsedData.summary || '';\nconst imageUrl = parsedData.imageUrl || '';\nconst link = parsedData.link || '';\n\n// ساخت پیام با فرمت HTML\nconst caption = `<b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه خبر</a>`;\n\nreturn [{\n    json: {\n        caption: caption,\n        photo: imageUrl\n    }\n}];"
+        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || '';\nconst summary = parsedData.summary || '';\nconst imageUrl = parsedData.imageUrl || '';\nconst link = parsedData.link || '';\n\n// ساخت پیام با فرمت HTML و ایموجی‌های رسمی\nconst caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @YourChannelName`;\n\nreturn [{\n    json: {\n        caption: caption,\n        photo: imageUrl\n    }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
