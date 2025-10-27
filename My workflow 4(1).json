@@ -44,7 +44,7 @@
             },
             {
               "key": "imageUrl",
-              "cssSelector": "article img, .entry-content img, .elementor-widget-image img",
+              "cssSelector": "img.wp-image-4813",
               "returnValue": "attribute",
               "attribute": "src"
             }
@@ -101,7 +101,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || '';\nconst summary = parsedData.summary || '';\nconst imageUrl = parsedData.imageUrl || '';\nconst link = parsedData.link || '';\n\n// ساخت پیام با فرمت HTML\nconst caption = `<b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه خبر</a>`;\n\nreturn [{\n    json: {\n        caption: caption,\n        photo: imageUrl\n    }\n}];"
+        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || '';\nconst summary = parsedData.summary || '';\nconst imageUrl = parsedData.imageUrl || '';\nconst link = parsedData.link || '';\n\n// ساخت پیام با فرمت HTML\nconst message = `<b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه خبر</a>`;\n\nreturn [{\n    json: {\n        message: message,\n        imageUrl: imageUrl,\n        hasImage: imageUrl ? true : false\n    }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -134,7 +134,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyDJvZgrG_jwRm1qGcVW2IPW4qAjIs3Dd4",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
