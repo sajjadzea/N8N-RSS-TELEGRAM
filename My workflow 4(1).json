@@ -63,7 +63,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const title = $input.first().json.title || 'بدون عنوان';\nconst content = decodeURIComponent($input.first().json.content || '');\nconst link = $input.first().json.link || '';\n\n// ساخت متن خلاصه‌سازی\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف):\\n\\n${content}`;\n\nreturn [{\n  json: {\n    prompt,\n    originalTitle: title,\n    link,\n    imageUrl: $input.first().json.imageUrl || ''\n  }\n}];"
+        "jsCode": "const title = $input.first().json.title || 'بدون عنوان';\nconst content = decodeURIComponent($input.first().json.content || '');\nconst link = $input.first().json.link || '';\nconst imageUrl = $input.first().json.imageUrl || '';\n\n// ساخت متن خلاصه‌سازی با درخواست JSON\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف).\\n\\nمتن خبر:\\n${content}\\n\\nخروجی را حتماً به صورت JSON با فرمت زیر برگردان:\\n{\\n  \"title\": \"${title}\",\\n  \"summary\": \"متن خلاصه شده\",\\n  \"imageUrl\": \"${imageUrl}\",\\n  \"link\": \"${link}\"\\n}`;\n\nreturn [{\n  json: {\n    prompt\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -78,9 +78,9 @@
       "parameters": {
         "operation": "sendPhoto",
         "chatId": "-1003140416257",
-        "file": "{{ $json.photo }}",
+        "file": "={{ $json.photo }}",
         "additionalFields": {
-          "caption": "{{ $json.caption }}"
+          "caption": "={{ $json.caption }}"
         }
       },
       "type": "n8n-nodes-base.telegram",
