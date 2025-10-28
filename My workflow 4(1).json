@@ -4,7 +4,18 @@
     {
       "parameters": {
         "url": "={{ $json[\"link\"] }}",
-        "options": {}
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; n8n-bot/1.0)"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -43,8 +54,44 @@
               "cssSelector": "div.elementor-widget-container p"
             },
             {
-              "key": "imageUrl",
-              "cssSelector": "figure.wp-block-image img[src*='/uploads/'], img[src*='/uploads/'][class*='wp-image-']",
+              "key": "ogImage",
+              "cssSelector": "meta[property=\"og:image\"]",
+              "returnValue": "attribute",
+              "attribute": "content"
+            },
+            {
+              "key": "twitterImage",
+              "cssSelector": "meta[name=\"twitter:image\"]",
+              "returnValue": "attribute",
+              "attribute": "content"
+            },
+            {
+              "key": "figureImg",
+              "cssSelector": "figure.wp-block-image img",
+              "returnValue": "attribute",
+              "attribute": "src"
+            },
+            {
+              "key": "elementorImg",
+              "cssSelector": ".elementor-widget-theme-post-featured-image img, .elementor-widget-image img, img.attachment-full",
+              "returnValue": "attribute",
+              "attribute": "src"
+            },
+            {
+              "key": "lazyImg",
+              "cssSelector": "img[loading=\"lazy\"]",
+              "returnValue": "attribute",
+              "attribute": "src"
+            },
+            {
+              "key": "lazyImgSrcset",
+              "cssSelector": "img[loading=\"lazy\"]",
+              "returnValue": "attribute",
+              "attribute": "srcset"
+            },
+            {
+              "key": "articleFirstImg",
+              "cssSelector": "article img, .entry-content img",
               "returnValue": "attribute",
               "attribute": "src"
             }
@@ -63,7 +110,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const htmlData = $input.first().json;\nconst rssData = $input.all()[0].json; // داده‌های اولیه از RSS\n\nconst title = htmlData.title || rssData.title || 'بدون عنوان';\nconst content = Array.isArray(htmlData.content) ? htmlData.content.join(' ') : (htmlData.content || '');\nconst link = rssData.link || '';\nconst imageUrl = htmlData.imageUrl || '';\n\n// فیلتر تصاویر نامعتبر - کلمات کلیدی\nconst invalidKeywords = ['aparat', 'logo', 'icon', 'banner', 'avatar', 'placeholder'];\n\n// فیلتر پسوندهای ویدیو و فایل‌های نامعتبر\nconst videoExtensions = ['.mp4', '.webm', '.avi', '.mov', '.flv', '.mkv', '.m4v', '.3gp'];\nconst validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];\n\n// بررسی اعتبار تصویر\nlet isValidImage = false;\nif (imageUrl) {\n  const urlLower = imageUrl.toLowerCase();\n  \n  // 1. چک کردن پسوند ویدیو (باید رد بشه)\n  const hasVideoExtension = videoExtensions.some(ext => urlLower.includes(ext));\n  \n  // 2. چک کردن کلمات کلیدی نامعتبر\n  const hasInvalidKeyword = invalidKeywords.some(k => urlLower.includes(k));\n  \n  // 3. چک کردن پسوند معتبر تصویر\n  const hasValidImageExtension = validImageExtensions.some(ext => urlLower.endsWith(ext));\n  \n  // تصویر معتبر است اگر:\n  // - پسوند ویدیو نداشته باشد\n  // - کلمه کلیدی نامعتبر نداشته باشد  \n  // - پسوند تصویر معتبر داشته باشد\n  isValidImage = !hasVideoExtension && !hasInvalidKeyword && hasValidImageExtension;\n}\n\nconst finalImageUrl = isValidImage ? imageUrl : '';\n\n// ساخت متن خلاصه‌سازی با درخواست JSON\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف).\\n\\nمتن خبر:\\n${content}\\n\\nخروجی را حتماً به صورت JSON با فرمت زیر برگردان:\\n{\\n  \"title\": \"${title}\",\\n  \"summary\": \"متن خلاصه شده\",\\n  \"imageUrl\": \"${finalImageUrl}\",\\n  \"link\": \"${link}\"\\n}`;\n\nreturn [{\n  json: {\n    prompt\n  }\n}];"
+        "jsCode": "// Helper function to validate image URL\nfunction isValidImageUrl(url) {\n  if (!url) return false;\n  \n  const urlLower = url.toLowerCase().trim();\n  \n  const invalidKeywords = ['aparat', 'logo', 'icon', 'banner', 'avatar', 'placeholder'];\n  const videoExtensions = ['.mp4', '.webm', '.avi', '.mov', '.flv', '.mkv', '.m4v', '.3gp'];\n  const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];\n  \n  const hasVideoExtension = videoExtensions.some(ext => urlLower.includes(ext));\n  const hasInvalidKeyword = invalidKeywords.some(k => urlLower.includes(k));\n  const hasValidImageExtension = validImageExtensions.some(ext => urlLower.endsWith(ext));\n  \n  return !hasVideoExtension && !hasInvalidKeyword && hasValidImageExtension;\n}\n\n// Helper function to parse srcset and get largest image\nfunction parseSrcset(srcsetString) {\n  if (!srcsetString) return null;\n  \n  const pairs = [...srcsetString.matchAll(/(\\S+)\\s+(\\d+)w/g)];\n  if (pairs.length > 0) {\n    pairs.sort((a, b) => parseInt(b[2]) - parseInt(a[2]));\n    return pairs[0][1].trim();\n  }\n  return null;\n}\n\n// Helper function to normalize URL (relative to absolute)\nfunction normalizeUrl(url, baseUrl) {\n  if (!url) return null;\n  \n  url = url.trim();\n  \n  // Already absolute\n  if (url.startsWith('http://') || url.startsWith('https://')) {\n    return url;\n  }\n  \n  // Make absolute\n  try {\n    const base = new URL(baseUrl);\n    return new URL(url, baseUrl).href;\n  } catch (e) {\n    return url; // Return as-is if URL parsing fails\n  }\n}\n\n// Main logic\nconst htmlData = $input.first().json;\nconst rssData = $input.all()[0].json;\n\nconst title = htmlData.title || rssData.title || 'بدون عنوان';\nconst content = Array.isArray(htmlData.content) ? htmlData.content.join(' ') : (htmlData.content || '');\nconst link = rssData.link || '';\n\n// Image selection priority\nlet imageUrl = null;\nlet imageSource = null;\n\n// 1. RSS feed image (from extractImageFromFeed)\nif (rssData.imageUrl) {\n  imageUrl = rssData.imageUrl;\n  imageSource = rssData.imageSource || 'rss';\n}\n\n// 2. og:image\nif (!imageUrl && htmlData.ogImage) {\n  imageUrl = htmlData.ogImage;\n  imageSource = 'og:image';\n}\n\n// 3. twitter:image  \nif (!imageUrl && htmlData.twitterImage) {\n  imageUrl = htmlData.twitterImage;\n  imageSource = 'twitter:image';\n}\n\n// 4. figure.wp-block-image img\nif (!imageUrl && htmlData.figureImg) {\n  imageUrl = htmlData.figureImg;\n  imageSource = 'figure';\n}\n\n// 5. elementor images\nif (!imageUrl && htmlData.elementorImg) {\n  imageUrl = htmlData.elementorImg;\n  imageSource = 'elementor';\n}\n\n// 6. lazy loaded images\nif (!imageUrl && htmlData.lazyImg) {\n  imageUrl = htmlData.lazyImg;\n  imageSource = 'lazy-img';\n}\n\n// 6b. lazy loaded srcset\nif (!imageUrl && htmlData.lazyImgSrcset) {\n  const parsed = parseSrcset(htmlData.lazyImgSrcset);\n  if (parsed) {\n    imageUrl = parsed;\n    imageSource = 'lazy-srcset';\n  }\n}\n\n// 7. article first image\nif (!imageUrl && htmlData.articleFirstImg) {\n  imageUrl = htmlData.articleFirstImg;\n  imageSource = 'article';\n}\n\n// Normalize URL\nif (imageUrl) {\n  imageUrl = normalizeUrl(imageUrl, link);\n}\n\n// Validate image\nconst imageFound = isValidImageUrl(imageUrl);\nconst finalImageUrl = imageFound ? imageUrl : '';\n\n// Prepare prompt for Gemini\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف).\\n\\nمتن خبر:\\n${content}\\n\\nخروجی را حتماً به صورت JSON با فرمت زیر برگردان:\\n{\\n  \"title\": \"${title}\",\\n  \"summary\": \"متن خلاصه شده\"\\n}`;\n\nreturn [{\n  json: {\n    prompt: prompt,\n    originalTitle: title,\n    link: link,\n    imageUrl: finalImageUrl,\n    imageSource: imageSource,\n    imageFound: imageFound\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -72,13 +119,14 @@
         -1248
       ],
       "id": "3bfee3de-94de-42c0-a421-a4b7aada4e38",
-      "name": "Code in JavaScript"
+      "name": "chooseAndNormalizeImage"
     },
     {
       "parameters": {
         "operation": "sendPhoto",
         "chatId": "-1003140416257",
-        "file": "={{ $json.photo }}",
+        "binaryData": true,
+        "binaryPropertyName": "imageFile",
         "additionalFields": {
           "caption": "={{ $json.caption }}",
           "parse_mode": "HTML"
@@ -87,7 +135,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1344,
+        1600,
         -1088
       ],
       "id": "9a2c38e8-9179-4f29-b5e8-edc751f56354",
@@ -102,16 +150,16 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || '';\nlet summary = parsedData.summary || '';\nlet imageUrl = parsedData.imageUrl || '';\nconst link = parsedData.link || '';\n\n// اعتبارسنجی نهایی تصویر (لایه دوم فیلترینگ)\nconst invalidKeywords = ['aparat', 'logo', 'icon', 'banner', 'avatar', 'placeholder'];\nconst videoExtensions = ['.mp4', '.webm', '.avi', '.mov', '.flv', '.mkv', '.m4v', '.3gp'];\nconst validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];\n\nif (imageUrl) {\n  const urlLower = imageUrl.toLowerCase();\n  const hasVideoExtension = videoExtensions.some(ext => urlLower.includes(ext));\n  const hasInvalidKeyword = invalidKeywords.some(k => urlLower.includes(k));\n  const hasValidImageExtension = validImageExtensions.some(ext => urlLower.endsWith(ext));\n  \n  // اگر تصویر نامعتبر بود، خالی می‌کنیم\n  if (hasVideoExtension || hasInvalidKeyword || !hasValidImageExtension) {\n    imageUrl = '';\n  }\n}\n\n// ساخت پیام با فرمت HTML و ایموجی‌های رسمی\nlet caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n\n// محدود کردن caption به 950 کاراکتر (تلگرام حداکثر 1024 دارد)\nif (caption.length > 950) {\n  const maxSummaryLength = 950 - title.length - link.length - 100; // 100 برای ایموجی و فرمت\n  summary = summary.substring(0, maxSummaryLength) + '...';\n  caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n}\n\nreturn [{\n    json: {\n        caption: caption,\n        photo: imageUrl,\n        hasImage: Boolean(imageUrl)\n    }\n}];"
+        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || item.originalTitle || '';\nlet summary = parsedData.summary || '';\nconst link = item.link || '';\nconst imageUrl = item.imageUrl || '';\nconst imageFound = item.imageFound || false;\n\n// ساخت پیام با فرمت HTML و ایموجی‌های رسمی\nlet caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n\n// محدود کردن caption به 950 کاراکتر (تلگرام حداکثر 1024 دارد)\nif (caption.length > 950) {\n  const maxSummaryLength = 950 - title.length - link.length - 100; // 100 برای ایموجی و فرمت\n  summary = summary.substring(0, maxSummaryLength) + '...';\n  caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n}\n\nreturn [{\n    json: {\n        caption: caption,\n        imageUrl: imageUrl,\n        imageFound: imageFound,\n        imageSource: item.imageSource || 'none'\n    }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1040,
+        1200,
         -1104
       ],
       "id": "0d5e5061-2b99-46d3-a507-a84fb7ef6ed5",
-      "name": "Code in JavaScript2"
+      "name": "formatForTelegram"
     },
     {
       "parameters": {
@@ -161,7 +209,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  try {\n    const decodedLink = decodeURIComponent(item.json.link);\n    return { json: { ...item.json, link: decodedLink } };\n  } catch (e) {\n    return item;\n  }\n});"
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const json = item.json;\n  \n  // Decode link\n  let link = json.link || '';\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  let imageUrl = null;\n  let imageSource = null;\n  \n  // 1) Check enclosure\n  if (json.enclosure && json.enclosure.url) {\n    imageUrl = json.enclosure.url.trim();\n    imageSource = 'enclosure';\n  } else if (json.links && Array.isArray(json.links)) {\n    for (const l of json.links) {\n      if (l.rel === 'enclosure' && l.href) {\n        imageUrl = l.href.trim();\n        imageSource = 'enclosure';\n        break;\n      }\n    }\n  }\n  \n  // 2) Check media:content\n  if (!imageUrl && json['media:content']) {\n    const m = json['media:content'];\n    imageUrl = (m.url || m).toString().trim();\n    imageSource = 'media:content';\n  }\n  \n  // 3) Search in content:encoded for img tags\n  if (!imageUrl) {\n    const htmlContent = json['content:encoded'] || json.content || json.summary || '';\n    if (htmlContent) {\n      const html = htmlContent.toString();\n      \n      // Try src\n      let match = html.match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-lazy-src=[\"']([^\"']+)[\"']/i);\n      \n      // Try srcset if no src found\n      if (!match) {\n        const srcsetMatch = html.match(/srcset=[\"']([^\"']+)[\"']/i);\n        if (srcsetMatch && srcsetMatch[1]) {\n          // Extract largest image from srcset\n          const pairs = [...srcsetMatch[1].matchAll(/(\\S+)\\s+(\\d+)w/g)];\n          if (pairs.length > 0) {\n            pairs.sort((a, b) => parseInt(b[2]) - parseInt(a[2]));\n            imageUrl = pairs[0][1].trim();\n            imageSource = 'content:encoded-srcset';\n          }\n        }\n      } else {\n        imageUrl = match[1].trim();\n        imageSource = 'content:encoded';\n      }\n    }\n  }\n  \n  return {\n    json: {\n      ...json,\n      link: link,\n      imageUrl: imageUrl,\n      imageSource: imageSource,\n      needsHtmlParse: !imageUrl\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -170,7 +218,56 @@
         -1312
       ],
       "id": "b50ae6bf-8bb5-4280-9aa9-da09e91d0956",
-      "name": "Code in JavaScript3"
+      "name": "extractImageFromFeed"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.imageUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; n8n-bot/1.0)"
+            },
+            {
+              "name": "Accept",
+              "value": "image/*"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        -1104
+      ],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "downloadImage"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "binaryPropertyName": "data",
+        "newName": "imageFile"
+      },
+      "type": "n8n-nodes-base.moveBinaryData",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        -1104
+      ],
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "renameBinary"
     }
   ],
   "pinData": {},
@@ -179,7 +276,7 @@
       "main": [
         [
           {
-            "node": "Code in JavaScript3",
+            "node": "extractImageFromFeed",
             "type": "main",
             "index": 0
           }
@@ -201,14 +298,14 @@
       "main": [
         [
           {
-            "node": "Code in JavaScript",
+            "node": "chooseAndNormalizeImage",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code in JavaScript": {
+    "chooseAndNormalizeImage": {
       "main": [
         [
           {
@@ -224,11 +321,11 @@
         []
       ]
     },
-    "Code in JavaScript2": {
+    "formatForTelegram": {
       "main": [
         [
           {
-            "node": "Send a photo message",
+            "node": "downloadImage",
             "type": "main",
             "index": 0
           }
@@ -250,14 +347,14 @@
       "main": [
         [
           {
-            "node": "Code in JavaScript2",
+            "node": "formatForTelegram",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code in JavaScript3": {
+    "extractImageFromFeed": {
       "main": [
         [
           {
@@ -268,22 +365,22 @@
         ]
       ]
     },
-    "HTTP Request": {
+    "downloadImage": {
       "main": [
         [
           {
-            "node": "HTML",
+            "node": "renameBinary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTML": {
+    "renameBinary": {
       "main": [
         [
           {
-            "node": "Code in JavaScript",
+            "node": "Send a photo message",
             "type": "main",
             "index": 0
           }
