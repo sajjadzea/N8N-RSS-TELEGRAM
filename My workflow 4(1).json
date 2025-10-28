@@ -135,11 +135,37 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1600,
-        -1088
+        1700,
+        -1000
       ],
       "id": "9a2c38e8-9179-4f29-b5e8-edc751f56354",
       "name": "Send a photo message",
+      "webhookId": "0f87e073-af12-400a-906e-6b55dfca20c7",
+      "credentials": {
+        "telegramApi": {
+          "id": "w3HIcBgC88omBsJ7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "-1003140416257",
+        "text": "={{ $json.caption }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "disable_web_page_preview": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1500,
+        -1200
+      ],
+      "id": "d4e5f6a7-b8c9-0123-def4-567890123456",
+      "name": "Send text message",
       "webhookId": "0f87e073-af12-400a-906e-6b55dfca20c7",
       "credentials": {
         "telegramApi": {
@@ -228,11 +254,19 @@
           "parameters": [
             {
               "name": "User-Agent",
-              "value": "Mozilla/5.0 (compatible; n8n-bot/1.0)"
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             },
             {
               "name": "Accept",
-              "value": "image/*"
+              "value": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+            },
+            {
+              "name": "Referer",
+              "value": "https://wesh.ir/"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9,fa;q=0.8"
             }
           ]
         },
@@ -242,17 +276,50 @@
               "responseFormat": "file"
             }
           },
-          "timeout": 60000
+          "timeout": 60000,
+          "retry": {
+            "retry": {
+              "maxRetries": 3,
+              "retryInterval": 1000
+            }
+          }
         }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1400,
-        -1104
+        1450,
+        -1000
       ],
       "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "name": "downloadImage"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.imageFound }}",
+              "value2": true
+            }
+          ],
+          "string": [
+            {
+              "value1": "={{ $json.imageUrl }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        -1104
+      ],
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "checkImageExists"
     },
     {
       "parameters": {
@@ -321,11 +388,34 @@
         []
       ]
     },
+    "Send text message": {
+      "main": [
+        []
+      ]
+    },
     "formatForTelegram": {
       "main": [
         [
           {
+            "node": "checkImageExists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checkImageExists": {
+      "main": [
+        [
+          {
             "node": "downloadImage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send text message",
             "type": "main",
             "index": 0
           }
