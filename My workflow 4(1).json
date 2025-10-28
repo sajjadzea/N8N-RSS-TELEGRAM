@@ -40,7 +40,7 @@
             },
             {
               "key": "content",
-              "cssSelector": "p"
+              "cssSelector": "div.elementor-widget-container p"
             },
             {
               "key": "imageUrl",
