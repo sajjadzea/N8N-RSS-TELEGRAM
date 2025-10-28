@@ -9,12 +9,26 @@
           "parameters": [
             {
               "name": "User-Agent",
-              "value": "Mozilla/5.0 (compatible; n8n-bot/1.0)"
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9,fa;q=0.8"
             }
           ]
         },
         "options": {
-          "timeout": 30000
+          "timeout": 30000,
+          "retry": {
+            "retry": {
+              "maxRetries": 2,
+              "retryInterval": 1000
+            }
+          }
         }
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -235,7 +249,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const json = item.json;\n  \n  // Decode link\n  let link = json.link || '';\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  let imageUrl = null;\n  let imageSource = null;\n  \n  // 1) Check enclosure\n  if (json.enclosure && json.enclosure.url) {\n    imageUrl = json.enclosure.url.trim();\n    imageSource = 'enclosure';\n  } else if (json.links && Array.isArray(json.links)) {\n    for (const l of json.links) {\n      if (l.rel === 'enclosure' && l.href) {\n        imageUrl = l.href.trim();\n        imageSource = 'enclosure';\n        break;\n      }\n    }\n  }\n  \n  // 2) Check media:content\n  if (!imageUrl && json['media:content']) {\n    const m = json['media:content'];\n    imageUrl = (m.url || m).toString().trim();\n    imageSource = 'media:content';\n  }\n  \n  // 3) Search in content:encoded for img tags\n  if (!imageUrl) {\n    const htmlContent = json['content:encoded'] || json.content || json.summary || '';\n    if (htmlContent) {\n      const html = htmlContent.toString();\n      \n      // Try src\n      let match = html.match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-lazy-src=[\"']([^\"']+)[\"']/i);\n      \n      // Try srcset if no src found\n      if (!match) {\n        const srcsetMatch = html.match(/srcset=[\"']([^\"']+)[\"']/i);\n        if (srcsetMatch && srcsetMatch[1]) {\n          // Extract largest image from srcset\n          const pairs = [...srcsetMatch[1].matchAll(/(\\S+)\\s+(\\d+)w/g)];\n          if (pairs.length > 0) {\n            pairs.sort((a, b) => parseInt(b[2]) - parseInt(a[2]));\n            imageUrl = pairs[0][1].trim();\n            imageSource = 'content:encoded-srcset';\n          }\n        }\n      } else {\n        imageUrl = match[1].trim();\n        imageSource = 'content:encoded';\n      }\n    }\n  }\n  \n  return {\n    json: {\n      ...json,\n      link: link,\n      imageUrl: imageUrl,\n      imageSource: imageSource,\n      needsHtmlParse: !imageUrl\n    }\n  };\n});"
+        "jsCode": "const items = $input.all();\nconst validItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Validate link exists and is valid URL\n  let link = json.link || '';\n  link = link.trim();\n  \n  // Skip items without valid link\n  if (!link || link.length < 10 || (!link.startsWith('http://') && !link.startsWith('https://'))) {\n    console.log('Skipping item with invalid link:', link);\n    continue;\n  }\n  \n  // Decode link\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  let imageUrl = null;\n  let imageSource = null;\n  \n  // 1) Check enclosure\n  if (json.enclosure && json.enclosure.url) {\n    imageUrl = json.enclosure.url.trim();\n    imageSource = 'enclosure';\n  } else if (json.links && Array.isArray(json.links)) {\n    for (const l of json.links) {\n      if (l.rel === 'enclosure' && l.href) {\n        imageUrl = l.href.trim();\n        imageSource = 'enclosure';\n        break;\n      }\n    }\n  }\n  \n  // 2) Check media:content\n  if (!imageUrl && json['media:content']) {\n    const m = json['media:content'];\n    imageUrl = (m.url || m).toString().trim();\n    imageSource = 'media:content';\n  }\n  \n  // 3) Search in content:encoded for img tags\n  if (!imageUrl) {\n    const htmlContent = json['content:encoded'] || json.content || json.summary || '';\n    if (htmlContent) {\n      const html = htmlContent.toString();\n      \n      // Try src\n      let match = html.match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-lazy-src=[\"']([^\"']+)[\"']/i);\n      \n      // Try srcset if no src found\n      if (!match) {\n        const srcsetMatch = html.match(/srcset=[\"']([^\"']+)[\"']/i);\n        if (srcsetMatch && srcsetMatch[1]) {\n          // Extract largest image from srcset\n          const pairs = [...srcsetMatch[1].matchAll(/(\\S+)\\s+(\\d+)w/g)];\n          if (pairs.length > 0) {\n            pairs.sort((a, b) => parseInt(b[2]) - parseInt(a[2]));\n            imageUrl = pairs[0][1].trim();\n            imageSource = 'content:encoded-srcset';\n          }\n        }\n      } else {\n        imageUrl = match[1].trim();\n        imageSource = 'content:encoded';\n      }\n    }\n  }\n  \n  validItems.push({\n    json: {\n      ...json,\n      link: link,\n      imageUrl: imageUrl,\n      imageSource: imageSource,\n      needsHtmlParse: !imageUrl\n    }\n  });\n}\n\nreturn validItems;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
