@@ -44,7 +44,7 @@
             },
             {
               "key": "imageUrl",
-              "cssSelector": "figure.wp-block-image img, img.wp-image-4804, img.wp-image-4805, img[class*='wp-image-']",
+              "cssSelector": "figure.wp-block-image img[src*='/uploads/'], img[src*='/uploads/'][class*='wp-image-']",
               "returnValue": "attribute",
               "attribute": "src"
             }
