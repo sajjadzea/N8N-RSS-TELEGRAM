@@ -3,6 +3,52 @@
   "nodes": [
     {
       "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtMinute": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -240,
+        -1104
+      ],
+      "id": "52c4a316-39c9-48b7-8cf8-80307ae81243",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://wesh.ir/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -96,
+        -896
+      ],
+      "id": "526eb62c-a4c1-49b4-a5e3-e8ee66eb6bcd",
+      "name": "RSS Read"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst validItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Validate link exists and is valid URL\n  let link = json.link || '';\n  link = link.trim();\n  \n  // Skip items without valid link\n  if (!link || link.length < 10 || (!link.startsWith('http://') && !link.startsWith('https://'))) {\n    console.log('Skipping item with invalid link:', link);\n    continue;\n  }\n  \n  // Decode link\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  let imageUrl = null;\n  let imageSource = null;\n  \n  // 1) Check enclosure\n  if (json.enclosure && json.enclosure.url) {\n    imageUrl = json.enclosure.url.trim();\n    imageSource = 'enclosure';\n  } else if (json.links && Array.isArray(json.links)) {\n    for (const l of json.links) {\n      if (l.rel === 'enclosure' && l.href) {\n        imageUrl = l.href.trim();\n        imageSource = 'enclosure';\n        break;\n      }\n    }\n  }\n  \n  // 2) Check media:content\n  if (!imageUrl && json['media:content']) {\n    const m = json['media:content'];\n    imageUrl = (m.url || m).toString().trim();\n    imageSource = 'media:content';\n  }\n  \n  // 3) Search in content:encoded for img tags\n  if (!imageUrl) {\n    const htmlContent = json['content:encoded'] || json.content || json.summary || '';\n    if (htmlContent) {\n      const html = htmlContent.toString();\n      \n      // Try src\n      let match = html.match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-lazy-src=[\"']([^\"']+)[\"']/i);\n      \n      // Try srcset if no src found\n      if (!match) {\n        const srcsetMatch = html.match(/srcset=[\"']([^\"']+)[\"']/i);\n        if (srcsetMatch && srcsetMatch[1]) {\n          // Extract largest image from srcset\n          const pairs = [...srcsetMatch[1].matchAll(/(\\S+)\\s+(\\d+)w/g)];\n          if (pairs.length > 0) {\n            pairs.sort((a, b) => parseInt(b[2]) - parseInt(a[2]));\n            imageUrl = pairs[0][1].trim();\n            imageSource = 'content:encoded-srcset';\n          }\n        }\n      } else {\n        imageUrl = match[1].trim();\n        imageSource = 'content:encoded';\n      }\n    }\n  }\n  \n  validItems.push({\n    json: {\n      ...json,\n      link: link,\n      imageUrl: imageUrl,\n      imageSource: imageSource,\n      needsHtmlParse: !imageUrl\n    }\n  });\n}\n\nreturn validItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        -1312
+      ],
+      "id": "b50ae6bf-8bb5-4280-9aa9-da09e91d0956",
+      "name": "extractImageFromFeed"
+    },
+    {
+      "parameters": {
         "url": "={{ $json[\"link\"] }}",
         "sendHeaders": true,
         "headerParameters": {
@@ -39,20 +85,6 @@
       ],
       "id": "5e5d8d89-9540-4774-a691-46e570ae9185",
       "name": "HTTP Request"
-    },
-    {
-      "parameters": {
-        "url": "https://wesh.ir/feed/",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.rssFeedRead",
-      "typeVersion": 1.2,
-      "position": [
-        -96,
-        -896
-      ],
-      "id": "526eb62c-a4c1-49b4-a5e3-e8ee66eb6bcd",
-      "name": "RSS Read"
     },
     {
       "parameters": {
@@ -137,91 +169,6 @@
     },
     {
       "parameters": {
-        "operation": "sendPhoto",
-        "chatId": "-1003140416257",
-        "binaryData": true,
-        "binaryPropertyName": "imageFile",
-        "additionalFields": {
-          "caption": "={{ $json.caption }}",
-          "parse_mode": "HTML"
-        }
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1700,
-        -1000
-      ],
-      "id": "9a2c38e8-9179-4f29-b5e8-edc751f56354",
-      "name": "Send a photo message",
-      "webhookId": "0f87e073-af12-400a-906e-6b55dfca20c7",
-      "credentials": {
-        "telegramApi": {
-          "id": "w3HIcBgC88omBsJ7",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "sendMessage",
-        "chatId": "-1003140416257",
-        "text": "={{ $json.caption }}",
-        "additionalFields": {
-          "parse_mode": "HTML",
-          "disable_web_page_preview": false
-        }
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1500,
-        -1200
-      ],
-      "id": "d4e5f6a7-b8c9-0123-def4-567890123456",
-      "name": "Send text message",
-      "webhookId": "0f87e073-af12-400a-906e-6b55dfca20c7",
-      "credentials": {
-        "telegramApi": {
-          "id": "w3HIcBgC88omBsJ7",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || item.originalTitle || '';\nlet summary = parsedData.summary || '';\nconst link = item.link || '';\nconst imageUrl = item.imageUrl || '';\nconst imageFound = item.imageFound || false;\n\n// ساخت پیام با فرمت HTML و ایموجی‌های رسمی\nlet caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n\n// محدود کردن caption به 950 کاراکتر (تلگرام حداکثر 1024 دارد)\nif (caption.length > 950) {\n  const maxSummaryLength = 950 - title.length - link.length - 100; // 100 برای ایموجی و فرمت\n  summary = summary.substring(0, maxSummaryLength) + '...';\n  caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n}\n\nreturn [{\n    json: {\n        caption: caption,\n        imageUrl: imageUrl,\n        imageFound: imageFound,\n        imageSource: item.imageSource || 'none'\n    }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1200,
-        -1104
-      ],
-      "id": "0d5e5061-2b99-46d3-a507-a84fb7ef6ed5",
-      "name": "formatForTelegram"
-    },
-    {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "triggerAtMinute": 15
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        -240,
-        -1104
-      ],
-      "id": "52c4a316-39c9-48b7-8cf8-80307ae81243",
-      "name": "Schedule Trigger"
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "=https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
         "sendHeaders": true,
@@ -249,16 +196,66 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst validItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Validate link exists and is valid URL\n  let link = json.link || '';\n  link = link.trim();\n  \n  // Skip items without valid link\n  if (!link || link.length < 10 || (!link.startsWith('http://') && !link.startsWith('https://'))) {\n    console.log('Skipping item with invalid link:', link);\n    continue;\n  }\n  \n  // Decode link\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  let imageUrl = null;\n  let imageSource = null;\n  \n  // 1) Check enclosure\n  if (json.enclosure && json.enclosure.url) {\n    imageUrl = json.enclosure.url.trim();\n    imageSource = 'enclosure';\n  } else if (json.links && Array.isArray(json.links)) {\n    for (const l of json.links) {\n      if (l.rel === 'enclosure' && l.href) {\n        imageUrl = l.href.trim();\n        imageSource = 'enclosure';\n        break;\n      }\n    }\n  }\n  \n  // 2) Check media:content\n  if (!imageUrl && json['media:content']) {\n    const m = json['media:content'];\n    imageUrl = (m.url || m).toString().trim();\n    imageSource = 'media:content';\n  }\n  \n  // 3) Search in content:encoded for img tags\n  if (!imageUrl) {\n    const htmlContent = json['content:encoded'] || json.content || json.summary || '';\n    if (htmlContent) {\n      const html = htmlContent.toString();\n      \n      // Try src\n      let match = html.match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-lazy-src=[\"']([^\"']+)[\"']/i);\n      \n      // Try srcset if no src found\n      if (!match) {\n        const srcsetMatch = html.match(/srcset=[\"']([^\"']+)[\"']/i);\n        if (srcsetMatch && srcsetMatch[1]) {\n          // Extract largest image from srcset\n          const pairs = [...srcsetMatch[1].matchAll(/(\\S+)\\s+(\\d+)w/g)];\n          if (pairs.length > 0) {\n            pairs.sort((a, b) => parseInt(b[2]) - parseInt(a[2]));\n            imageUrl = pairs[0][1].trim();\n            imageSource = 'content:encoded-srcset';\n          }\n        }\n      } else {\n        imageUrl = match[1].trim();\n        imageSource = 'content:encoded';\n      }\n    }\n  }\n  \n  validItems.push({\n    json: {\n      ...json,\n      link: link,\n      imageUrl: imageUrl,\n      imageSource: imageSource,\n      needsHtmlParse: !imageUrl\n    }\n  });\n}\n\nreturn validItems;"
+        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// Get original data from previous node (from HTTP Request1 input)\nconst inputData = $input.first().json;\nconst originalTitle = inputData.originalTitle || '';\nconst link = inputData.link || '';\nconst imageUrl = inputData.imageUrl || '';\nconst imageFound = inputData.imageFound || false;\nconst imageSource = inputData.imageSource || 'none';\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || originalTitle;\nlet summary = parsedData.summary || '';\n\n// ساخت پیام با فرمت HTML و ایموجی‌های رسمی\nlet caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n\n// محدود کردن caption به 950 کاراکتر (تلگرام حداکثر 1024 دارد)\nif (caption.length > 950) {\n  const maxSummaryLength = 950 - title.length - link.length - 100; // 100 برای ایموجی و فرمت\n  summary = summary.substring(0, maxSummaryLength) + '...';\n  caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n}\n\nreturn [{\n    json: {\n        caption: caption,\n        imageUrl: imageUrl,\n        imageFound: imageFound,\n        imageSource: imageSource\n    }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        64,
-        -1312
+        1200,
+        -1104
       ],
-      "id": "b50ae6bf-8bb5-4280-9aa9-da09e91d0956",
-      "name": "extractImageFromFeed"
+      "id": "0d5e5061-2b99-46d3-a507-a84fb7ef6ed5",
+      "name": "formatForTelegram"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "boolean1",
+              "leftValue": "={{ $json.imageFound }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "string1",
+              "leftValue": "={{ $json.imageUrl }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "string2",
+              "leftValue": "={{ $json.imageUrl }}",
+              "rightValue": "http",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        -1104
+      ],
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "checkImageExists"
     },
     {
       "parameters": {
@@ -302,7 +299,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1450,
+        1600,
         -1000
       ],
       "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -310,54 +307,106 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.imageFound }}",
-              "value2": true
-            }
-          ],
-          "string": [
-            {
-              "value1": "={{ $json.imageUrl }}",
-              "operation": "isNotEmpty"
-            }
-          ]
-        },
-        "combineOperation": "all"
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1300,
-        -1104
-      ],
-      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-      "name": "checkImageExists"
-    },
-    {
-      "parameters": {
-        "mode": "raw",
-        "binaryPropertyName": "data",
-        "newName": "imageFile"
+        "mode": "jsonToBinary",
+        "options": {
+          "fileName": "={{ $json.imageUrl.split('/').pop() }}",
+          "mimeType": "image/jpeg"
+        }
       },
       "type": "n8n-nodes-base.moveBinaryData",
       "typeVersion": 1,
       "position": [
-        1500,
-        -1104
+        1750,
+        -1000
       ],
       "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "name": "renameBinary"
+      "name": "setBinaryData"
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "operation": "sendPhoto",
+        "chatId": "-1003140416257",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1900,
+        -1000
+      ],
+      "id": "9a2c38e8-9179-4f29-b5e8-edc751f56354",
+      "name": "Send a photo message",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telegram_bot_token",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "operation": "sendMessage",
+        "chatId": "-1003140416257",
+        "text": "={{ $json.caption }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "disable_web_page_preview": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1600,
+        -1200
+      ],
+      "id": "d4e5f6a7-b8c9-0123-def4-567890123456",
+      "name": "Send text message",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telegram_bot_token",
+          "name": "Telegram Bot"
+        }
+      }
     }
   ],
   "pinData": {},
   "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "RSS Read": {
       "main": [
         [
           {
             "node": "extractImageFromFeed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extractImageFromFeed": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
             "type": "main",
             "index": 0
           }
@@ -397,14 +446,15 @@
         ]
       ]
     },
-    "Send a photo message": {
+    "HTTP Request1": {
       "main": [
-        []
-      ]
-    },
-    "Send text message": {
-      "main": [
-        []
+        [
+          {
+            "node": "formatForTelegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "formatForTelegram": {
@@ -436,51 +486,18 @@
         ]
       ]
     },
-    "Schedule Trigger": {
-      "main": [
-        [
-          {
-            "node": "RSS Read",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HTTP Request1": {
-      "main": [
-        [
-          {
-            "node": "formatForTelegram",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "extractImageFromFeed": {
-      "main": [
-        [
-          {
-            "node": "HTTP Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "downloadImage": {
       "main": [
         [
           {
-            "node": "renameBinary",
+            "node": "setBinaryData",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "renameBinary": {
+    "setBinaryData": {
       "main": [
         [
           {
@@ -489,6 +506,16 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Send a photo message": {
+      "main": [
+        []
+      ]
+    },
+    "Send text message": {
+      "main": [
+        []
       ]
     }
   },
