@@ -40,29 +40,11 @@
             },
             {
               "key": "content",
-              "cssSelector": "div.elementor-widget-container p"
+              "cssSelector": "p"
             },
             {
-              "key": "ogImage",
-              "cssSelector": "meta[property='og:image']",
-              "returnValue": "attribute",
-              "attribute": "content"
-            },
-            {
-              "key": "twitterImage",
-              "cssSelector": "meta[name='twitter:image']",
-              "returnValue": "attribute",
-              "attribute": "content"
-            },
-            {
-              "key": "featuredImage",
-              "cssSelector": "img.attachment-full, img[class*='wp-image-'], img.wp-post-image, .post-thumbnail img",
-              "returnValue": "attribute",
-              "attribute": "src"
-            },
-            {
-              "key": "firstLargeImage",
-              "cssSelector": "article.post img, .entry-content img, .elementor-widget-container img, main img",
+              "key": "imageUrl",
+              "cssSelector": "figure.wp-block-image img, img.wp-image-4804, img.wp-image-4805, img[class*='wp-image-']",
               "returnValue": "attribute",
               "attribute": "src"
             }
@@ -81,7 +63,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const title = $input.first().json.title || 'بدون عنوان';\nconst content = $input.first().json.content || '';\nconst link = $input.first().json.link || '';\nconst imageUrl = $input.first().json.imageUrl || '';\n\n// ساخت متن خلاصه‌سازی با درخواست JSON\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف).\\n\\nمتن خبر:\\n${content}\\n\\nخروجی را حتماً به صورت JSON با فرمت زیر برگردان:\\n{\\n  \"title\": \"${title}\",\\n  \"summary\": \"متن خلاصه شده\",\\n  \"imageUrl\": \"${imageUrl}\",\\n  \"link\": \"${link}\"\\n}`;\n\nreturn [{\n  json: {\n    prompt\n  }\n}];"
+        "jsCode": "const htmlData = $input.first().json;\nconst rssData = $input.all()[0].json; // داده‌های اولیه از RSS\n\nconst title = htmlData.title || rssData.title || 'بدون عنوان';\nconst content = Array.isArray(htmlData.content) ? htmlData.content.join(' ') : (htmlData.content || '');\nconst link = rssData.link || '';\nconst imageUrl = htmlData.imageUrl || '';\n\n// فیلتر تصاویر نامعتبر\nconst invalidKeywords = ['aparat', 'logo', 'LOGO', 'icon', 'banner', 'avatar'];\nconst isValidImage = imageUrl && !invalidKeywords.some(k => imageUrl.toLowerCase().includes(k));\nconst finalImageUrl = isValidImage ? imageUrl : '';\n\n// ساخت متن خلاصه‌سازی با درخواست JSON\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف).\\n\\nمتن خبر:\\n${content}\\n\\nخروجی را حتماً به صورت JSON با فرمت زیر برگردان:\\n{\\n  \"title\": \"${title}\",\\n  \"summary\": \"متن خلاصه شده\",\\n  \"imageUrl\": \"${finalImageUrl}\",\\n  \"link\": \"${link}\"\\n}`;\n\nreturn [{\n  json: {\n    prompt\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -179,7 +161,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  try {\n    const data = item.json;\n    const decodedLink = decodeURIComponent(data.link);\n    \n    // استخراج تصویر از content:encoded\n    const htmlContent = data['content:encoded'] || data.content || '';\n    \n    // اولویت 1: تصاویر داخل figure.wp-block-image (تصاویر اصلی خبر)\n    const figureRegex = /<figure[^>]*class=[\"'][^\"']*wp-block-image[^\"']*[\"'][^>]*>\\s*<img[^>]+(src|data-src|data-lazy-src)=[\"']([^\"']+)[\"'][^>]*>/gi;\n    let matches = [...htmlContent.matchAll(figureRegex)];\n    \n    // اگر نبود، اولویت 2: هر تصویری که ویدیو نیست\n    if (matches.length === 0) {\n      const imgRegex = /<img[^>]+(src|data-src|data-lazy-src)=[\"']([^\"']+)[\"'][^>]*>/gi;\n      matches = [...htmlContent.matchAll(imgRegex)];\n    }\n    \n    // فیلتر کردن تصاویر معتبر\n    const invalidKeywords = ['aparat', 'icon', 'logo', 'LOGO', 'avatar', 'placeholder', 'default', 'emoji', 'banner', 'video', 'youtube', 'vimeo'];\n    const validImages = matches\n      .map(m => m[2]) // group 2 contains URL\n      .filter(url => {\n        if (!url || url.length < 10) return false;\n        const urlLower = url.toLowerCase();\n        // فیلتر کلمات نامعتبر\n        const hasInvalidKeyword = invalidKeywords.some(k => urlLower.includes(k.toLowerCase()));\n        // فیلتر تصاویر کوچک\n        const isSmallImage = /\\d+x\\d+/.test(url) && (url.includes('150x') || url.includes('300x') || url.includes('50x') || url.includes('100x'));\n        // فیلتر فایل‌های ویدیویی\n        const isVideo = url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.avi') || url.endsWith('.mov');\n        return !hasInvalidKeyword && !isSmallImage && !isVideo;\n      });\n    \n    const imageUrl = validImages[0] || '';\n    const contentText = data['content:encodedSnippet'] || data.contentSnippet || '';\n    \n    return { \n      json: { \n        title: data.title,\n        link: decodedLink,\n        content: contentText,\n        imageUrl: imageUrl,\n        hasValidImage: Boolean(imageUrl && imageUrl.length > 0)\n      } \n    };\n  } catch (e) {\n    console.error('Parse error:', e);\n    return item;\n  }\n});"
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  try {\n    const decodedLink = decodeURIComponent(item.json.link);\n    return { json: { ...item.json, link: decodedLink } };\n  } catch (e) {\n    return item;\n  }\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -276,6 +258,28 @@
       ]
     },
     "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML": {
       "main": [
         [
           {
