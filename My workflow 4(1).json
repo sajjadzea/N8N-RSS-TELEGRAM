@@ -14,8 +14,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -240,
-        -1104
+        240,
+        300
       ],
       "id": "52c4a316-39c9-48b7-8cf8-80307ae81243",
       "name": "Schedule Trigger"
@@ -28,28 +28,28 @@
       "type": "n8n-nodes-base.rssFeedRead",
       "typeVersion": 1.2,
       "position": [
-        -96,
-        -896
+        460,
+        300
       ],
       "id": "526eb62c-a4c1-49b4-a5e3-e8ee66eb6bcd",
       "name": "RSS Read"
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst validItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Validate link exists and is valid URL\n  let link = json.link || '';\n  link = link.trim();\n  \n  // Skip items without valid link\n  if (!link || link.length < 10 || (!link.startsWith('http://') && !link.startsWith('https://'))) {\n    console.log('Skipping item with invalid link:', link);\n    continue;\n  }\n  \n  // Decode link\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  let imageUrl = null;\n  let imageSource = null;\n  \n  // 1) Check enclosure\n  if (json.enclosure && json.enclosure.url) {\n    imageUrl = json.enclosure.url.trim();\n    imageSource = 'enclosure';\n  } else if (json.links && Array.isArray(json.links)) {\n    for (const l of json.links) {\n      if (l.rel === 'enclosure' && l.href) {\n        imageUrl = l.href.trim();\n        imageSource = 'enclosure';\n        break;\n      }\n    }\n  }\n  \n  // 2) Check media:content\n  if (!imageUrl && json['media:content']) {\n    const m = json['media:content'];\n    imageUrl = (m.url || m).toString().trim();\n    imageSource = 'media:content';\n  }\n  \n  // 3) Search in content:encoded for img tags\n  if (!imageUrl) {\n    const htmlContent = json['content:encoded'] || json.content || json.summary || '';\n    if (htmlContent) {\n      const html = htmlContent.toString();\n      \n      // Try src\n      let match = html.match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-src=[\"']([^\"']+)[\"']/i);\n      if (!match) match = html.match(/<img[^>]+data-lazy-src=[\"']([^\"']+)[\"']/i);\n      \n      // Try srcset if no src found\n      if (!match) {\n        const srcsetMatch = html.match(/srcset=[\"']([^\"']+)[\"']/i);\n        if (srcsetMatch && srcsetMatch[1]) {\n          // Extract largest image from srcset\n          const pairs = [...srcsetMatch[1].matchAll(/(\\S+)\\s+(\\d+)w/g)];\n          if (pairs.length > 0) {\n            pairs.sort((a, b) => parseInt(b[2]) - parseInt(a[2]));\n            imageUrl = pairs[0][1].trim();\n            imageSource = 'content:encoded-srcset';\n          }\n        }\n      } else {\n        imageUrl = match[1].trim();\n        imageSource = 'content:encoded';\n      }\n    }\n  }\n  \n  validItems.push({\n    json: {\n      ...json,\n      link: link,\n      imageUrl: imageUrl,\n      imageSource: imageSource,\n      needsHtmlParse: !imageUrl\n    }\n  });\n}\n\nreturn validItems;"
+        "jsCode": "// Decode Link and Validate\nconst items = $input.all();\nconst validItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Get and validate link\n  let link = json.link || '';\n  link = link.trim();\n  \n  // Skip items without valid link\n  if (!link || link.length < 10 || (!link.startsWith('http://') && !link.startsWith('https://'))) {\n    console.log('Skipping item with invalid link:', link);\n    continue;\n  }\n  \n  // Decode URL-encoded characters\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  // Keep original data + decoded link\n  validItems.push({\n    json: {\n      ...json,\n      link: link,\n      originalTitle: json.title || 'بدون عنوان'\n    }\n  });\n}\n\nreturn validItems;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        64,
-        -1312
+        680,
+        300
       ],
       "id": "b50ae6bf-8bb5-4280-9aa9-da09e91d0956",
-      "name": "extractImageFromFeed"
+      "name": "Decode Link"
     },
     {
       "parameters": {
-        "url": "={{ $json[\"link\"] }}",
+        "url": "={{ $json.link }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -80,15 +80,15 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        256,
-        -1232
+        900,
+        300
       ],
       "id": "5e5d8d89-9540-4774-a691-46e570ae9185",
       "name": "HTTP Request"
     },
     {
       "parameters": {
-        "operation": "extractHtmlContent",
+        "dataPropertyName": "data",
         "extractionValues": {
           "values": [
             {
@@ -97,47 +97,11 @@
             },
             {
               "key": "content",
-              "cssSelector": "div.elementor-widget-container p"
+              "cssSelector": "p"
             },
             {
-              "key": "ogImage",
-              "cssSelector": "meta[property=\"og:image\"]",
-              "returnValue": "attribute",
-              "attribute": "content"
-            },
-            {
-              "key": "twitterImage",
-              "cssSelector": "meta[name=\"twitter:image\"]",
-              "returnValue": "attribute",
-              "attribute": "content"
-            },
-            {
-              "key": "figureImg",
-              "cssSelector": "figure.wp-block-image img",
-              "returnValue": "attribute",
-              "attribute": "src"
-            },
-            {
-              "key": "elementorImg",
-              "cssSelector": ".elementor-widget-theme-post-featured-image img, .elementor-widget-image img, img.attachment-full",
-              "returnValue": "attribute",
-              "attribute": "src"
-            },
-            {
-              "key": "lazyImg",
-              "cssSelector": "img[loading=\"lazy\"]",
-              "returnValue": "attribute",
-              "attribute": "src"
-            },
-            {
-              "key": "lazyImgSrcset",
-              "cssSelector": "img[loading=\"lazy\"]",
-              "returnValue": "attribute",
-              "attribute": "srcset"
-            },
-            {
-              "key": "articleFirstImg",
-              "cssSelector": "article img, .entry-content img",
+              "key": "imageUrl",
+              "cssSelector": "figure img",
               "returnValue": "attribute",
               "attribute": "src"
             }
@@ -148,64 +112,24 @@
       "type": "n8n-nodes-base.html",
       "typeVersion": 1.2,
       "position": [
-        384,
-        -896
+        1120,
+        300
       ],
       "id": "e4d98a87-78ec-44ed-96de-1686df7243de",
-      "name": "HTML"
+      "name": "HTML Extract"
     },
     {
       "parameters": {
-        "jsCode": "// Helper function to validate image URL\nfunction isValidImageUrl(url) {\n  if (!url) return false;\n  \n  const urlLower = url.toLowerCase().trim();\n  \n  const invalidKeywords = ['aparat', 'logo', 'icon', 'banner', 'avatar', 'placeholder'];\n  const videoExtensions = ['.mp4', '.webm', '.avi', '.mov', '.flv', '.mkv', '.m4v', '.3gp'];\n  const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];\n  \n  const hasVideoExtension = videoExtensions.some(ext => urlLower.includes(ext));\n  const hasInvalidKeyword = invalidKeywords.some(k => urlLower.includes(k));\n  const hasValidImageExtension = validImageExtensions.some(ext => urlLower.endsWith(ext));\n  \n  return !hasVideoExtension && !hasInvalidKeyword && hasValidImageExtension;\n}\n\n// Helper function to parse srcset and get largest image\nfunction parseSrcset(srcsetString) {\n  if (!srcsetString) return null;\n  \n  const pairs = [...srcsetString.matchAll(/(\\S+)\\s+(\\d+)w/g)];\n  if (pairs.length > 0) {\n    pairs.sort((a, b) => parseInt(b[2]) - parseInt(a[2]));\n    return pairs[0][1].trim();\n  }\n  return null;\n}\n\n// Helper function to normalize URL (relative to absolute)\nfunction normalizeUrl(url, baseUrl) {\n  if (!url) return null;\n  \n  url = url.trim();\n  \n  // Already absolute\n  if (url.startsWith('http://') || url.startsWith('https://')) {\n    return url;\n  }\n  \n  // Make absolute\n  try {\n    const base = new URL(baseUrl);\n    return new URL(url, baseUrl).href;\n  } catch (e) {\n    return url; // Return as-is if URL parsing fails\n  }\n}\n\n// Main logic\nconst htmlData = $input.first().json;\nconst rssData = $input.all()[0].json;\n\nconst title = htmlData.title || rssData.title || 'بدون عنوان';\nconst content = Array.isArray(htmlData.content) ? htmlData.content.join(' ') : (htmlData.content || '');\nconst link = rssData.link || '';\n\n// Image selection priority\nlet imageUrl = null;\nlet imageSource = null;\n\n// 1. RSS feed image (from extractImageFromFeed)\nif (rssData.imageUrl) {\n  imageUrl = rssData.imageUrl;\n  imageSource = rssData.imageSource || 'rss';\n}\n\n// 2. og:image\nif (!imageUrl && htmlData.ogImage) {\n  imageUrl = htmlData.ogImage;\n  imageSource = 'og:image';\n}\n\n// 3. twitter:image  \nif (!imageUrl && htmlData.twitterImage) {\n  imageUrl = htmlData.twitterImage;\n  imageSource = 'twitter:image';\n}\n\n// 4. figure.wp-block-image img\nif (!imageUrl && htmlData.figureImg) {\n  imageUrl = htmlData.figureImg;\n  imageSource = 'figure';\n}\n\n// 5. elementor images\nif (!imageUrl && htmlData.elementorImg) {\n  imageUrl = htmlData.elementorImg;\n  imageSource = 'elementor';\n}\n\n// 6. lazy loaded images\nif (!imageUrl && htmlData.lazyImg) {\n  imageUrl = htmlData.lazyImg;\n  imageSource = 'lazy-img';\n}\n\n// 6b. lazy loaded srcset\nif (!imageUrl && htmlData.lazyImgSrcset) {\n  const parsed = parseSrcset(htmlData.lazyImgSrcset);\n  if (parsed) {\n    imageUrl = parsed;\n    imageSource = 'lazy-srcset';\n  }\n}\n\n// 7. article first image\nif (!imageUrl && htmlData.articleFirstImg) {\n  imageUrl = htmlData.articleFirstImg;\n  imageSource = 'article';\n}\n\n// Normalize URL\nif (imageUrl) {\n  imageUrl = normalizeUrl(imageUrl, link);\n}\n\n// Validate image\nconst imageFound = isValidImageUrl(imageUrl);\nconst finalImageUrl = imageFound ? imageUrl : '';\n\n// Prepare prompt for Gemini\nconst prompt = `لطفاً این خبر را به فارسی و به صورت خلاصه، روان و جذاب خلاصه کن (حداکثر ۳ پاراگراف).\\n\\nمتن خبر:\\n${content}\\n\\nخروجی را حتماً به صورت JSON با فرمت زیر برگردان:\\n{\\n  \"title\": \"${title}\",\\n  \"summary\": \"متن خلاصه شده\"\\n}`;\n\nreturn [{\n  json: {\n    prompt: prompt,\n    originalTitle: title,\n    link: link,\n    imageUrl: finalImageUrl,\n    imageSource: imageSource,\n    imageFound: imageFound\n  }\n}];"
+        "jsCode": "// Format Message for Telegram\nconst items = $input.all();\nconst formattedItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Get data from HTML Extract\n  const title = json.title || json.originalTitle || 'بدون عنوان';\n  const content = Array.isArray(json.content) ? json.content.join('\\n\\n') : (json.content || '');\n  const link = json.link || '';\n  let imageUrl = json.imageUrl || '';\n  \n  // Validate and normalize image URL\n  if (imageUrl) {\n    imageUrl = imageUrl.trim();\n    \n    // Make absolute URL if relative\n    if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {\n      try {\n        const base = new URL(link);\n        imageUrl = new URL(imageUrl, link).href;\n      } catch (e) {\n        imageUrl = ''; // Invalid URL\n      }\n    }\n    \n    // Validate image (not video, not logo)\n    const invalidKeywords = ['aparat', 'logo', 'icon', 'banner', 'avatar'];\n    const videoExtensions = ['.mp4', '.webm', '.avi', '.mov', '.flv', '.mkv'];\n    const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];\n    \n    const urlLower = imageUrl.toLowerCase();\n    const hasVideoExtension = videoExtensions.some(ext => urlLower.includes(ext));\n    const hasInvalidKeyword = invalidKeywords.some(k => urlLower.includes(k));\n    const hasValidExtension = validImageExtensions.some(ext => urlLower.endsWith(ext));\n    \n    if (hasVideoExtension || hasInvalidKeyword || !hasValidExtension) {\n      imageUrl = ''; // Invalid image\n    }\n  }\n  \n  // Create summary (first 500 chars of content)\n  let summary = content.substring(0, 500);\n  if (content.length > 500) {\n    summary += '...';\n  }\n  \n  // Format caption\n  let caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n  \n  // Limit caption to 950 characters\n  if (caption.length > 950) {\n    const maxSummaryLength = 950 - title.length - link.length - 100;\n    summary = content.substring(0, maxSummaryLength) + '...';\n    caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n  }\n  \n  formattedItems.push({\n    json: {\n      caption: caption,\n      imageUrl: imageUrl,\n      hasImage: Boolean(imageUrl),\n      chatId: '-1003140416257'\n    }\n  });\n}\n\nreturn formattedItems;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        624,
-        -1248
+        1340,
+        300
       ],
       "id": "3bfee3de-94de-42c0-a421-a4b7aada4e38",
-      "name": "chooseAndNormalizeImage"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ {\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": $json.prompt\n        }\n      ]\n    }\n  ]\n} }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        848,
-        -1328
-      ],
-      "id": "903565e5-cc7c-4ac1-aa52-58c1e6d63369",
-      "name": "HTTP Request1"
-    },
-    {
-      "parameters": {
-        "jsCode": "const item = $input.item.json;\n\n// استخراج پاسخ Gemini\nconst response = item.candidates[0].content.parts[0].text;\n\n// پاک‌سازی و parse کردن JSON\nlet cleanResponse = response.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsedData;\ntry {\n    parsedData = JSON.parse(cleanResponse);\n} catch (e) {\n    console.error('Parse error:', e);\n    return [];\n}\n\n// Get original data from previous node (from HTTP Request1 input)\nconst inputData = $input.first().json;\nconst originalTitle = inputData.originalTitle || '';\nconst link = inputData.link || '';\nconst imageUrl = inputData.imageUrl || '';\nconst imageFound = inputData.imageFound || false;\nconst imageSource = inputData.imageSource || 'none';\n\n// فرمت نهایی برای تلگرام\nconst title = parsedData.title || originalTitle;\nlet summary = parsedData.summary || '';\n\n// ساخت پیام با فرمت HTML و ایموجی‌های رسمی\nlet caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n\n// محدود کردن caption به 950 کاراکتر (تلگرام حداکثر 1024 دارد)\nif (caption.length > 950) {\n  const maxSummaryLength = 950 - title.length - link.length - 100; // 100 برای ایموجی و فرمت\n  summary = summary.substring(0, maxSummaryLength) + '...';\n  caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @wesh_ir`;\n}\n\nreturn [{\n    json: {\n        caption: caption,\n        imageUrl: imageUrl,\n        imageFound: imageFound,\n        imageSource: imageSource\n    }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1200,
-        -1104
-      ],
-      "id": "0d5e5061-2b99-46d3-a507-a84fb7ef6ed5",
-      "name": "formatForTelegram"
+      "name": "Format Message"
     },
     {
       "parameters": {
@@ -218,29 +142,11 @@
           "conditions": [
             {
               "id": "boolean1",
-              "leftValue": "={{ $json.imageFound }}",
+              "leftValue": "={{ $json.hasImage }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
                 "operation": "equals"
-              }
-            },
-            {
-              "id": "string1",
-              "leftValue": "={{ $json.imageUrl }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEquals"
-              }
-            },
-            {
-              "id": "string2",
-              "leftValue": "={{ $json.imageUrl }}",
-              "rightValue": "http",
-              "operator": {
-                "type": "string",
-                "operation": "startsWith"
               }
             }
           ],
@@ -251,85 +157,19 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1400,
-        -1104
+        1560,
+        300
       ],
       "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-      "name": "checkImageExists"
-    },
-    {
-      "parameters": {
-        "url": "={{ $json.imageUrl }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "User-Agent",
-              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            },
-            {
-              "name": "Accept",
-              "value": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-            },
-            {
-              "name": "Referer",
-              "value": "https://wesh.ir/"
-            },
-            {
-              "name": "Accept-Language",
-              "value": "en-US,en;q=0.9,fa;q=0.8"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "file"
-            }
-          },
-          "timeout": 60000,
-          "retry": {
-            "retry": {
-              "maxRetries": 3,
-              "retryInterval": 1000
-            }
-          }
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1600,
-        -1000
-      ],
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "name": "downloadImage"
-    },
-    {
-      "parameters": {
-        "mode": "jsonToBinary",
-        "options": {
-          "fileName": "={{ $json.imageUrl.split('/').pop() }}",
-          "mimeType": "image/jpeg"
-        }
-      },
-      "type": "n8n-nodes-base.moveBinaryData",
-      "typeVersion": 1,
-      "position": [
-        1750,
-        -1000
-      ],
-      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "name": "setBinaryData"
+      "name": "Check Image"
     },
     {
       "parameters": {
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "operation": "sendPhoto",
-        "chatId": "-1003140416257",
-        "binaryData": true,
-        "binaryPropertyName": "data",
+        "chatId": "={{ $json.chatId }}",
+        "photo": "={{ $json.imageUrl }}",
         "additionalFields": {
           "caption": "={{ $json.caption }}",
           "parse_mode": "HTML"
@@ -338,11 +178,11 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1900,
-        -1000
+        1780,
+        200
       ],
       "id": "9a2c38e8-9179-4f29-b5e8-edc751f56354",
-      "name": "Send a photo message",
+      "name": "Send Photo",
       "credentials": {
         "httpHeaderAuth": {
           "id": "telegram_bot_token",
@@ -355,7 +195,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "operation": "sendMessage",
-        "chatId": "-1003140416257",
+        "chatId": "={{ $json.chatId }}",
         "text": "={{ $json.caption }}",
         "additionalFields": {
           "parse_mode": "HTML",
@@ -365,11 +205,11 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1600,
-        -1200
+        1780,
+        400
       ],
       "id": "d4e5f6a7-b8c9-0123-def4-567890123456",
-      "name": "Send text message",
+      "name": "Send Message",
       "credentials": {
         "httpHeaderAuth": {
           "id": "telegram_bot_token",
@@ -395,14 +235,14 @@
       "main": [
         [
           {
-            "node": "extractImageFromFeed",
+            "node": "Decode Link",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "extractImageFromFeed": {
+    "Decode Link": {
       "main": [
         [
           {
@@ -417,103 +257,59 @@
       "main": [
         [
           {
-            "node": "HTML",
+            "node": "HTML Extract",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTML": {
+    "HTML Extract": {
       "main": [
         [
           {
-            "node": "chooseAndNormalizeImage",
+            "node": "Format Message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "chooseAndNormalizeImage": {
+    "Format Message": {
       "main": [
         [
           {
-            "node": "HTTP Request1",
+            "node": "Check Image",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTTP Request1": {
+    "Check Image": {
       "main": [
         [
           {
-            "node": "formatForTelegram",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "formatForTelegram": {
-      "main": [
-        [
-          {
-            "node": "checkImageExists",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "checkImageExists": {
-      "main": [
-        [
-          {
-            "node": "downloadImage",
+            "node": "Send Photo",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Send text message",
+            "node": "Send Message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "downloadImage": {
-      "main": [
-        [
-          {
-            "node": "setBinaryData",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "setBinaryData": {
-      "main": [
-        [
-          {
-            "node": "Send a photo message",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send a photo message": {
+    "Send Photo": {
       "main": [
         []
       ]
     },
-    "Send text message": {
+    "Send Message": {
       "main": [
         []
       ]
