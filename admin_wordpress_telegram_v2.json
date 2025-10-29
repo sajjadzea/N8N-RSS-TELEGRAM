@@ -48,12 +48,64 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n\n  // --- 1. استخراج داده‌ها ---\n  const title = json.title || json.originalTitle || 'بدون عنوان';\n  const link = json.link || '';\n  let imageUrl = json.imageUrl || '';\n\n  // --- 2. مدیریت محتوای متنی ---\n  let contentString = '';\n  if (Array.isArray(json.content)) {\n    // اگر محتوا آرایه‌ای از پاراگراف‌ها بود، آن‌ها را با دو خط جدید به هم بچسبان\n    contentString = json.content.join('\\n\\n');\n  } else if (json.content) {\n    // اگر رشته بود، همان را استفاده کن\n    contentString = json.content;\n  }\n\n  // --- 3. اعتبارسنجی URL عکس ---\n  if (imageUrl) {\n    imageUrl = imageUrl.trim();\n    try {\n      if (imageUrl.includes('%')) {\n        imageUrl = decodeURIComponent(imageUrl);\n      }\n    } catch (e) { /* نادیده گرفتن خطای decode */ }\n    \n    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {\n      imageUrl = '';\n    }\n  }\n\n  // --- 4. ساخت خلاصه ---\n  // 500 کاراکتر اول محتوا را به عنوان خلاصه برمی‌داریم\n  let summary = contentString.substring(0, 500);\n  if (contentString.length > 500) {\n    summary += '...';\n  }\n\n  // --- 5. ساخت کپشن با فرمت جدید (HTML) ---\n  // ❗️نام کانال خود را جایگزین @YourChannelName کنید\n  let caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @w_e_s_h`;\n\n  // --- 6. محدودسازی طول کپشن ---\n  // تلگرام برای کپشن عکس محدودیت دارد (حدود 1024 کاراکتر)\n  // ما برای اطمینان روی 950 کاراکتر محدود می‌کنیم\n  if (caption.length > 950) {\n    const overhead = title.length + link.length + 100; // طول متن‌های اضافه\n    const maxSummaryLength = 950 - overhead;\n    summary = contentString.substring(0, maxSummaryLength) + '...';\n    \n    // ساخت مجدد کپشن با خلاصه‌ی کوتاه‌تر\n    caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @w_e_s_h`;\n  }\n\n  // --- 7. آماده‌سازی خروجی ---\n  outputItems.push({\n    json: {\n      ...json, // ارسال همه داده‌های قبلی\n      caption: caption,\n      imageUrl: imageUrl,\n      hasImage: Boolean(imageUrl), // فلگ مهم برای نود IF\n      chatId: json.chatId || '-1003140416257' // استفاده از ChatID قبلی\n    }\n  });\n}\n\nreturn outputItems;"
+        "jsCode": "// Prepare AI Prompt for Gemini\nconst items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // مدیریت محتوای متنی\n  let contentString = '';\n  if (Array.isArray(json.content)) {\n    contentString = json.content.join('\\n\\n');\n  } else if (json.content) {\n    contentString = json.content;\n  }\n  \n  const title = json.title || json.originalTitle || 'بدون عنوان';\n  \n  // محدود کردن محتوا به 3000 کاراکتر برای API (برای کاهش هزینه)\n  if (contentString.length > 3000) {\n    contentString = contentString.substring(0, 3000);\n  }\n  \n  // ساخت prompt برای Gemini\n  const prompt = `شما یک خلاصه‌نویس حرفه‌ای هستید. لطفاً خلاصه‌ای جذاب، خواناو معنادار از مقاله زیر به زبان فارسی بنویسید.\n\nعنوان: ${title}\n\nمحتوا: ${contentString}\n\nخلاصه باید:\n- بین 200 تا 400 کاراکتر باشد\n- نکات مهم و کلیدی مقاله را شامل شود\n- برای مخاطب جذاب و خواندنی باشد\n- به زبان فارسی روان و ساده باشد\n\nفقط خلاصه را بنویسید، بدون هیچ توضیح اضافی.`;\n  \n  outputItems.push({\n    json: {\n      ...json,\n      aiPrompt: prompt\n    }\n  });\n}\n\nreturn outputItems;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -46992,
+        -47040,
+        8192
+      ],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Prepare AI Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-exp:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contents",
+              "value": "={{ [{ \"parts\": [{ \"text\": $json.aiPrompt }] }] }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -46880,
+        8192
+      ],
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Gemini AI Summarizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract AI Summary from Gemini Response\nconst items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  let aiSummary = '';\n  \n  try {\n    // استخراج summary از response Gemini\n    if (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts && json.candidates[0].content.parts[0]) {\n      aiSummary = json.candidates[0].content.parts[0].text.trim();\n    }\n    \n    // اگر خلاصه خالی بود، از محتوای اولیه استفاده کن\n    if (!aiSummary) {\n      let contentString = '';\n      if (Array.isArray(json.content)) {\n        contentString = json.content.join('\\n\\n');\n      } else if (json.content) {\n        contentString = json.content;\n      }\n      aiSummary = contentString.substring(0, 400) + '...';\n    }\n  } catch (e) {\n    // در صورت خطا، از محتوای اولیه استفاده کن\n    let contentString = '';\n    if (Array.isArray(json.content)) {\n      contentString = json.content.join('\\n\\n');\n    } else if (json.content) {\n      contentString = json.content;\n    }\n    aiSummary = contentString.substring(0, 400) + '...';\n  }\n  \n  outputItems.push({\n    json: {\n      ...json,\n      aiSummary: aiSummary\n    }\n  });\n}\n\nreturn outputItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -46720,
+        8192
+      ],
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "Extract AI Summary"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n\n  // --- 1. استخراج داده‌ها ---\n  const title = json.title || json.originalTitle || 'بدون عنوان';\n  const link = json.link || '';\n  let imageUrl = json.imageUrl || '';\n\n  // --- 2. استفاده از خلاصه هوش مصنوعی ---\n  let summary = json.aiSummary || '';\n  \n  // اگر خلاصه AI خالی بود، از محتوای اصلی استفاده کن\n  if (!summary) {\n    let contentString = '';\n    if (Array.isArray(json.content)) {\n      contentString = json.content.join('\\n\\n');\n    } else if (json.content) {\n      contentString = json.content;\n    }\n    summary = contentString.substring(0, 400);\n    if (contentString.length > 400) {\n      summary += '...';\n    }\n  }\n\n  // --- 3. اعتبارسنجی URL عکس ---\n  if (imageUrl) {\n    imageUrl = imageUrl.trim();\n    try {\n      if (imageUrl.includes('%')) {\n        imageUrl = decodeURIComponent(imageUrl);\n      }\n    } catch (e) { /* نادیده گرفتن خطای decode */ }\n    \n    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {\n      imageUrl = '';\n    }\n  }\n\n  // --- 4. ساخت کپشن با فرمت جدید (HTML) ---\n  let caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @w_e_s_h`;\n\n  // --- 5. محدودسازی طول کپشن ---\n  // تلگرام برای کپشن عکس محدودیت دارد (حدود 1024 کاراکتر)\n  if (caption.length > 950) {\n    const overhead = title.length + link.length + 100;\n    const maxSummaryLength = 950 - overhead;\n    summary = summary.substring(0, maxSummaryLength) + '...';\n    \n    caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @w_e_s_h`;\n  }\n\n  // --- 6. آماده‌سازی خروجی ---\n  outputItems.push({\n    json: {\n      ...json,\n      caption: caption,\n      imageUrl: imageUrl,\n      hasImage: Boolean(imageUrl),\n      chatId: json.chatId || '-1003140416257'\n    }\n  });\n}\n\nreturn outputItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -46560,
         8192
       ],
       "id": "bdc907f5-c02e-49b2-90da-bac27df47c41",
@@ -96,7 +148,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -46768,
+        -46336,
         8192
       ],
       "id": "d9fe6016-2781-447a-b537-08d4c2b04021",
@@ -115,7 +167,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -46544,
+        -46112,
         8080
       ],
       "id": "985b6280-7951-44e9-b203-f09254714797",
@@ -140,7 +192,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -46544,
+        -46112,
         8288
       ],
       "id": "eb2fd74a-1419-4e7c-a6d3-ccb88ca61d34",
@@ -234,6 +286,39 @@
       ]
     },
     "HTML Extract": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini AI Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini AI Summarizer": {
+      "main": [
+        [
+          {
+            "node": "Extract AI Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract AI Summary": {
       "main": [
         [
           {
