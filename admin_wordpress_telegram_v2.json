@@ -61,7 +61,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Prepare Gemini Request Body\nconst items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Extract content\n  let contentString = '';\n  if (Array.isArray(json.content)) {\n    contentString = json.content.join('\\n\\n');\n  } else if (json.content) {\n    contentString = json.content;\n  }\n  \n  const title = json.title || json.originalTitle || 'بدون عنوان';\n  \n  // Limit content to 3000 chars to reduce API cost\n  if (contentString.length > 3000) {\n    contentString = contentString.substring(0, 3000);\n  }\n  \n  // Create prompt\n  const prompt = 'شما یک خلاصه‌نویس حرفه‌ای هستید. لطفاً خلاصه‌ای جذاب، خوانا و معنادار از مقاله زیر به زبان فارسی بنویسید.\\n\\nعنوان: ' + title + '\\n\\nمحتوا: ' + contentString + '\\n\\nخلاصه باید:\\n- بین 200 تا 400 کاراکتر باشد\\n- نکات مهم و کلیدی مقاله را شامل شود\\n- برای مخاطب جذاب و خواندنی باشد\\n- به زبان فارسی روان و ساده باشد\\n\\nفقط خلاصه را بنویسید، بدون هیچ توضیح اضافی.';\n  \n  // Create Gemini API request body\n  const geminiBody = {\n    contents: [\n      {\n        parts: [\n          {\n            text: prompt\n          }\n        ]\n      }\n    ]\n  };\n  \n  outputItems.push({\n    json: {\n      ...json,\n      geminiRequestBody: geminiBody\n    }\n  });\n}\n\nreturn outputItems;"
+        "jsCode": "// Prepare AI Prompt - Clean Version\nconst items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Extract and clean content\n  let contentString = '';\n  if (Array.isArray(json.content)) {\n    contentString = json.content.join(' ');\n  } else if (json.content) {\n    contentString = String(json.content);\n  }\n  \n  // Get title\n  const title = json.title || json.originalTitle || 'No Title';\n  \n  // Limit content length\n  if (contentString.length > 2500) {\n    contentString = contentString.substring(0, 2500);\n  }\n  \n  // Build prompt parts separately\n  const promptParts = [];\n  promptParts.push('You are a professional Persian summarizer.');\n  promptParts.push('Create an engaging summary in Persian (Farsi) for this article.');\n  promptParts.push('');\n  promptParts.push('Title: ' + title);\n  promptParts.push('');\n  promptParts.push('Content: ' + contentString);\n  promptParts.push('');\n  promptParts.push('Requirements:');\n  promptParts.push('- 200-400 characters in Persian');\n  promptParts.push('- Include key points');\n  promptParts.push('- Make it engaging');\n  promptParts.push('- Use simple Persian language');\n  promptParts.push('');\n  promptParts.push('Return ONLY the Persian summary, nothing else.');\n  \n  const fullPrompt = promptParts.join('\\n');\n  \n  outputItems.push({\n    json: {\n      ...json,\n      promptText: fullPrompt\n    }\n  });\n}\n\nreturn outputItems;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -77,9 +77,18 @@
         "method": "POST",
         "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
         "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.geminiRequestBody) }}",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json.promptText }] }] }) }}",
         "options": {
           "timeout": 30000
         }
@@ -95,7 +104,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract AI Summary from Gemini Response\nconst items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  let aiSummary = '';\n  \n  try {\n    // Extract summary from Gemini response\n    const candidate = json.candidates?.[0];\n    const text = candidate?.content?.parts?.[0]?.text;\n    \n    if (text) {\n      aiSummary = text.trim();\n    }\n  } catch (e) {\n    console.log('Error extracting AI summary:', e.message);\n  }\n  \n  // Fallback: use original content if AI summary is empty\n  if (!aiSummary) {\n    let contentString = '';\n    if (Array.isArray(json.content)) {\n      contentString = json.content.join('\\n\\n');\n    } else if (json.content) {\n      contentString = String(json.content);\n    }\n    aiSummary = contentString.substring(0, 400);\n    if (contentString.length > 400) {\n      aiSummary += '...';\n    }\n  }\n  \n  outputItems.push({\n    json: {\n      ...json,\n      aiSummary: aiSummary\n    }\n  });\n}\n\nreturn outputItems;"
+        "jsCode": "// Extract AI Summary from Gemini Response\nconst items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  let aiSummary = '';\n  \n  // Debug: log response structure\n  console.log('=== Gemini Response Debug ===');\n  console.log('Response keys:', Object.keys(json));\n  \n  try {\n    // Check if error in response\n    if (json.error) {\n      console.log('API Error:', JSON.stringify(json.error));\n    }\n    \n    // Extract summary from Gemini response\n    if (json.candidates && Array.isArray(json.candidates) && json.candidates.length > 0) {\n      const candidate = json.candidates[0];\n      console.log('Candidate found:', !!candidate);\n      \n      if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {\n        const firstPart = candidate.content.parts[0];\n        console.log('First part found:', !!firstPart);\n        \n        if (firstPart && firstPart.text) {\n          aiSummary = firstPart.text.trim();\n          console.log('Summary extracted, length:', aiSummary.length);\n        }\n      }\n    }\n  } catch (e) {\n    console.log('Error extracting AI summary:', e.message);\n    console.log('Stack:', e.stack);\n  }\n  \n  // Fallback: use original content if AI summary is empty\n  if (!aiSummary || aiSummary.length < 10) {\n    console.log('Using fallback summary');\n    let contentString = '';\n    if (Array.isArray(json.content)) {\n      contentString = json.content.join(' ');\n    } else if (json.content) {\n      contentString = String(json.content);\n    }\n    aiSummary = contentString.substring(0, 400);\n    if (contentString.length > 400) {\n      aiSummary += '...';\n    }\n  }\n  \n  outputItems.push({\n    json: {\n      ...json,\n      aiSummary: aiSummary\n    }\n  });\n}\n\nreturn outputItems;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
