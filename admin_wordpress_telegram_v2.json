@@ -3,6 +3,19 @@
   "nodes": [
     {
       "parameters": {
+        "jsCode": "// Get Latest RSS Item Only\nconst items = $input.all();\n\n// فقط اولین آیتم (آخرین خبر) را برمی‌گردانیم\nif (items.length > 0) {\n  return [items[0]];\n}\n\nreturn [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -47760,
+        8192
+      ],
+      "id": "f1a2b3c4-d5e6-7890-abcd-ef9876543210",
+      "name": "Get Latest Item Only"
+    },
+    {
+      "parameters": {
         "jsCode": "// Decode Link and Validate\nconst items = $input.all();\nconst validItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Get and validate link\n  let link = json.link || '';\n  link = link.trim();\n  \n  // Skip items without valid link\n  if (!link || link.length < 10 || (!link.startsWith('http://') && !link.startsWith('https://'))) {\n    console.log('Skipping item with invalid link:', link);\n    continue;\n  }\n  \n  // Decode URL-encoded characters\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  // Keep original data + decoded link\n  validItems.push({\n    json: {\n      ...json,\n      link: link,\n      originalTitle: json.title || 'بدون عنوان'\n    }\n  });\n}\n\nreturn validItems;"
       },
       "type": "n8n-nodes-base.code",
@@ -62,7 +75,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-exp:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
+        "url": "=https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -274,6 +287,17 @@
   ],
   "pinData": {},
   "connections": {
+    "Get Latest Item Only": {
+      "main": [
+        [
+          {
+            "node": "Decode Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Decode Link": {
       "main": [
         [
@@ -373,7 +397,7 @@
       "main": [
         [
           {
-            "node": "Decode Link",
+            "node": "Get Latest Item Only",
             "type": "main",
             "index": 0
           }
