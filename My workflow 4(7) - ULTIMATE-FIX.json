@@ -1,0 +1,501 @@
+{
+  "name": "My workflow 4 - ULTIMATE FIX",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Get Latest RSS Item Only\nconst items = $input.all();\n\n// فقط اولین آیتم (آخرین خبر) را برمی‌گردانیم\nif (items.length > 0) {\n  return [items[0]];\n}\n\nreturn [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -68048,
+        15808
+      ],
+      "id": "be7f0048-b8bd-48e9-87c5-b8258d30518c",
+      "name": "Get Latest Item Only1"
+    },
+    {
+      "parameters": {
+        "jsCode": "1. DECODE LINK3 - FIXED"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -67824,
+        15808
+      ],
+      "id": "4f5af7dc-d1b9-45bf-9644-9f719b098856",
+      "name": "Decode Link3"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "title",
+              "cssSelector": "title"
+            },
+            {
+              "key": "imageUrl",
+              "cssSelector": ".elementor-widget-theme-post-featured-image img",
+              "returnValue": "attribute",
+              "attribute": "src"
+            },
+            {
+              "key": "content",
+              "cssSelector": ".elementor-widget-theme-post-content p"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        -67376,
+        15808
+      ],
+      "id": "98dffff0-fdaa-473c-a33e-11d86651688f",
+      "name": "HTML Extract3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Gemini Request - با پشتیبانی کامل از Binary و String\nconst items = $input.all();\nconst outputItems = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const json = item.json;\n\n  // ===== دریافت عنوان =====\n  const title = json.title || 'بدون عنوان';\n\n  // ===== دریافت محتوا =====\n  let content = json.content || '';\n\n  // اگر محتوا آرایه است، به رشته تبدیل کن\n  if (Array.isArray(content)) {\n    content = content.join('\\n\\n');\n  }\n\n  // پاک کردن تگ‌های HTML\n  let contentString = String(content).replace(/<[^>]*>/g, '');\n\n  // محدود کردن طول\n  if (contentString.length > 3000) {\n    contentString = contentString.substring(0, 3000) + '...';\n  }\n\n  // ===== دریافت URL عکس =====\n  let imageUrl = json.imageUrl || '';\n  if (imageUrl) {\n    imageUrl = String(imageUrl).trim();\n  }\n\n  // ===== بررسی Binary =====\n  const hasBinaryData = Boolean(item.binary && item.binary.data);\n\n  // Log برای دیباگ\n  console.log('Prepare AI Prompt - Item', i, ':', {\n    hasBinary: hasBinaryData,\n    binaryKeys: item.binary ? Object.keys(item.binary) : [],\n    hasImageUrl: Boolean(imageUrl),\n    imageUrl: imageUrl ? imageUrl.substring(0, 60) : 'none'\n  });\n\n  // ===== ساخت Prompt =====\n  const prompt = `شما یک خلاصه‌نویس حرفه‌ای هستید. لطفاً خلاصه‌ای جذاب، خوانا و معنادار از مقاله زیر به زبان فارسی بنویسید.\n\nعنوان: ${title}\n\nمحتوا: ${contentString}\n\n${hasBinaryData || imageUrl ? 'تصویر مرتبط با خبر نیز ضمیمه شده است.\\n' : ''}\nخلاصه باید:\n- بین 200 تا 400 کاراکتر باشد\n- نکات مهم و کلیدی مقاله را شامل شود\n- برای مخاطب جذاب و خواندنی باشد\n- به زبان فارسی روان و ساده باشد\n\nفقط خلاصه را بنویسید، بدون هیچ توضیح اضافی.`;\n\n  // ===== ساخت Body برای Gemini =====\n  const geminiBody = {\n    contents: [{\n      parts: [{\n        text: prompt\n      }]\n    }]\n  };\n\n  // ===== خروجی با حفظ کامل =====\n  outputItems.push({\n    json: {\n      ...json,\n      imageUrl: imageUrl,  // ✅ حفظ imageUrl\n      geminiRequestBody: geminiBody,\n      promptText: prompt\n    },\n    binary: item.binary || {},  // ✅ حفظ Binary\n    pairedItem: item.pairedItem !== undefined ? item.pairedItem : i\n  });\n}\n\nreturn outputItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -67152,
+        15808
+      ],
+      "id": "8aa9253b-fb97-4294-94f1-149188984b14",
+      "name": "Prepare AI Prompt2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.geminiRequestBody }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "neverError": false
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -66928,
+        15808
+      ],
+      "id": "e0aea42a-a28a-43f4-b577-fc7ef40ba83f",
+      "name": "Gemini AI Summarizer2",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "FRvPhzjvbccZ9ud2",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "notes": "✅ Binary Data pass through enabled"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract AI Summary - با حفظ کامل Binary Data و imageUrl\nconst items = $input.all();\nconst outputItems = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const json = item.json;\n  let aiSummary = '';\n\n  try {\n    const candidate = json.candidates?.[0];\n    const text = candidate?.content?.parts?.[0]?.text;\n\n    if (text) {\n      aiSummary = text.trim();\n    }\n  } catch (e) {\n    console.log('Error extracting AI summary:', e.message);\n  }\n\n  // Fallback\n  if (!aiSummary) {\n    let contentString = json.content || '';\n    aiSummary = contentString.substring(0, 400);\n    if (contentString.length > 400) {\n      aiSummary += '...';\n    }\n  }\n\n  // ✅ حفظ imageUrl از node قبلی\n  const imageUrl = json.imageUrl || '';\n\n  // Log برای دیباگ\n  console.log('Extract AI Summary - Item', i, ':', {\n    hasBinary: Boolean(item.binary && Object.keys(item.binary).length > 0),\n    binaryKeys: item.binary ? Object.keys(item.binary) : [],\n    hasImageUrl: Boolean(imageUrl),\n    imageUrl: imageUrl ? imageUrl.substring(0, 60) : 'none',\n    aiSummaryLength: aiSummary.length\n  });\n\n  // ✅ حفظ کامل Binary، imageUrl و pairedItem\n  outputItems.push({\n    json: {\n      ...json,\n      aiSummary: aiSummary,\n      imageUrl: imageUrl  // ✅ اطمینان از وجود imageUrl\n    },\n    binary: item.binary || {},  // ✅ حفظ Binary\n    pairedItem: item.pairedItem !== undefined ? item.pairedItem : i\n  });\n}\n\nreturn outputItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -66704,
+        15808
+      ],
+      "id": "dbf1f868-2470-4919-93d0-2059ebb28ccd",
+      "name": "Extract AI Summary2"
+    },
+    {
+      "parameters": {
+        "jsCode": "4. FORMAT MESSAGE3 - FIXED"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -66480,
+        15808
+      ],
+      "id": "24fc9baa-137a-4099-b398-2e5c5a665257",
+      "name": "Format Message3",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "boolean1",
+              "leftValue": "={{ $json.hasImage }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b24950ef-2320-4991-963c-37894db44769",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -66256,
+        15808
+      ],
+      "id": "040066b8-de38-4448-9d84-173295de7c34",
+      "name": "Check Image3"
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $json.chatId }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -66032,
+        15712
+      ],
+      "id": "c5d5e3e4-bbba-430f-a37c-afb30ac36f11",
+      "name": "Send Photo3",
+      "webhookId": "774f8bcc-2ba5-4289-9f0c-8db293683f79",
+      "credentials": {
+        "telegramApi": {
+          "id": "w3HIcBgC88omBsJ7",
+          "name": "Telegram account"
+        }
+      },
+      "notes": "✅ Using Binary Data for image"
+    },
+    {
+      "parameters": {
+        "chatId": "=-1003140416257",
+        "text": "={{ $json.imageUrl }}\\n\n{{ $json.caption }}",
+        "additionalFields": {
+          "disable_web_page_preview": false,
+          "parse_mode": "=HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -66032,
+        15904
+      ],
+      "id": "5920b7dc-a3f0-4b56-a452-75b096229809",
+      "name": "Send Message3",
+      "webhookId": "891441b4-f3ed-42ae-a7fa-9084e88d33fe",
+      "credentials": {
+        "telegramApi": {
+          "id": "w3HIcBgC88omBsJ7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtMinute": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -68496,
+        15808
+      ],
+      "id": "dab0232d-89bd-419d-89e1-4ce42770b576",
+      "name": "Schedule Trigger4"
+    },
+    {
+      "parameters": {
+        "url": "https://wesh.ir/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -68272,
+        15808
+      ],
+      "id": "d24d8e19-01d1-42e0-b40d-5c0b4f3a5ad7",
+      "name": "RSS Read4"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.link }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9,fa;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -67600,
+        15808
+      ],
+      "id": "f8227836-748a-4a11-bc00-b744e9c52298",
+      "name": "HTTP Request6"
+    },
+    {
+      "parameters": {
+        "jsCode": "2. CODE IN JAVASCRIPT - FIXED"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -67264,
+        16048
+      ],
+      "id": "05ff331e-74be-44b7-ab6f-0b94290d1946",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.imageUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -67040,
+        15808
+      ],
+      "id": "download-image-ultimate-fix",
+      "name": "Download Image to Binary",
+      "notes": "✅ Download image to Binary Data",
+      "continueOnFail": true,
+      "alwaysOutputData": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get Latest Item Only1": {
+      "main": [
+        [
+          {
+            "node": "Decode Link3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode Link3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML Extract3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Prompt2": {
+      "main": [
+        [
+          {
+            "node": "Gemini AI Summarizer2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini AI Summarizer2": {
+      "main": [
+        [
+          {
+            "node": "Extract AI Summary2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract AI Summary2": {
+      "main": [
+        [
+          {
+            "node": "Format Message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message3": {
+      "main": [
+        [
+          {
+            "node": "Check Image3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Image3": {
+      "main": [
+        [
+          {
+            "node": "Send Photo3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger4": {
+      "main": [
+        [
+          {
+            "node": "RSS Read4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read4": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Item Only1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request6": {
+      "main": [
+        [
+          {
+            "node": "HTML Extract3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Download Image to Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image to Binary": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Prompt2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ULTIMATE-FIX-V3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e9ab7552981b4061a4ecd9f94dfb88c0d9ea8398e961467ddb816643976354e1"
+  },
+  "id": "2oVqZwqOndyErqhS",
+  "tags": []
+}
