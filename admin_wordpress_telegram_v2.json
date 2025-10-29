@@ -1,0 +1,321 @@
+{
+  "name": "My workflow 4",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Decode Link and Validate\nconst items = $input.all();\nconst validItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Get and validate link\n  let link = json.link || '';\n  link = link.trim();\n  \n  // Skip items without valid link\n  if (!link || link.length < 10 || (!link.startsWith('http://') && !link.startsWith('https://'))) {\n    console.log('Skipping item with invalid link:', link);\n    continue;\n  }\n  \n  // Decode URL-encoded characters\n  try {\n    link = decodeURIComponent(link);\n  } catch (e) {\n    // keep original if decode fails\n  }\n  \n  // Keep original data + decoded link\n  validItems.push({\n    json: {\n      ...json,\n      link: link,\n      originalTitle: json.title || 'بدون عنوان'\n    }\n  });\n}\n\nreturn validItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -47648,
+        8192
+      ],
+      "id": "476beb9f-cd9e-43f2-a4fa-d800e90f8aa1",
+      "name": "Decode Link"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "title",
+              "cssSelector": "title"
+            },
+            {
+              "key": "imageUrl",
+              "cssSelector": ".elementor-widget-theme-post-featured-image img",
+              "returnValue": "attribute",
+              "attribute": "src"
+            },
+            {
+              "key": "content",
+              "cssSelector": ".elementor-widget-theme-post-content p"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        -47200,
+        8192
+      ],
+      "id": "2ba17d7c-6c4e-4dbf-af28-d417643bda2a",
+      "name": "HTML Extract"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst outputItems = [];\n\nfor (const item of items) {\n  const json = item.json;\n\n  // --- 1. استخراج داده‌ها ---\n  const title = json.title || json.originalTitle || 'بدون عنوان';\n  const link = json.link || '';\n  let imageUrl = json.imageUrl || '';\n\n  // --- 2. مدیریت محتوای متنی ---\n  let contentString = '';\n  if (Array.isArray(json.content)) {\n    // اگر محتوا آرایه‌ای از پاراگراف‌ها بود، آن‌ها را با دو خط جدید به هم بچسبان\n    contentString = json.content.join('\\n\\n');\n  } else if (json.content) {\n    // اگر رشته بود، همان را استفاده کن\n    contentString = json.content;\n  }\n\n  // --- 3. اعتبارسنجی URL عکس ---\n  if (imageUrl) {\n    imageUrl = imageUrl.trim();\n    try {\n      if (imageUrl.includes('%')) {\n        imageUrl = decodeURIComponent(imageUrl);\n      }\n    } catch (e) { /* نادیده گرفتن خطای decode */ }\n    \n    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {\n      imageUrl = '';\n    }\n  }\n\n  // --- 4. ساخت خلاصه ---\n  // 500 کاراکتر اول محتوا را به عنوان خلاصه برمی‌داریم\n  let summary = contentString.substring(0, 500);\n  if (contentString.length > 500) {\n    summary += '...';\n  }\n\n  // --- 5. ساخت کپشن با فرمت جدید (HTML) ---\n  // ❗️نام کانال خود را جایگزین @YourChannelName کنید\n  let caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @w_e_s_h`;\n\n  // --- 6. محدودسازی طول کپشن ---\n  // تلگرام برای کپشن عکس محدودیت دارد (حدود 1024 کاراکتر)\n  // ما برای اطمینان روی 950 کاراکتر محدود می‌کنیم\n  if (caption.length > 950) {\n    const overhead = title.length + link.length + 100; // طول متن‌های اضافه\n    const maxSummaryLength = 950 - overhead;\n    summary = contentString.substring(0, maxSummaryLength) + '...';\n    \n    // ساخت مجدد کپشن با خلاصه‌ی کوتاه‌تر\n    caption = `📰 <b>${title}</b>\\n\\n${summary}\\n\\n🔗 <a href=\"${link}\">ادامه مطلب در وبسایت</a>\\n\\n📡 @w_e_s_h`;\n  }\n\n  // --- 7. آماده‌سازی خروجی ---\n  outputItems.push({\n    json: {\n      ...json, // ارسال همه داده‌های قبلی\n      caption: caption,\n      imageUrl: imageUrl,\n      hasImage: Boolean(imageUrl), // فلگ مهم برای نود IF\n      chatId: json.chatId || '-1003140416257' // استفاده از ChatID قبلی\n    }\n  });\n}\n\nreturn outputItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -46992,
+        8192
+      ],
+      "id": "bdc907f5-c02e-49b2-90da-bac27df47c41",
+      "name": "Format Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "boolean1",
+              "leftValue": "={{ $json.hasImage }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b24950ef-2320-4991-963c-37894db44769",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -46768,
+        8192
+      ],
+      "id": "d9fe6016-2781-447a-b537-08d4c2b04021",
+      "name": "Check Image"
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $json.chatId }}",
+        "file": "={{ $json.imageUrl }}",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -46544,
+        8080
+      ],
+      "id": "985b6280-7951-44e9-b203-f09254714797",
+      "name": "Send Photo",
+      "webhookId": "774f8bcc-2ba5-4289-9f0c-8db293683f79",
+      "credentials": {
+        "telegramApi": {
+          "id": "w3HIcBgC88omBsJ7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "=-1003140416257",
+        "text": "={{ $json.imageUrl }}\n{{ $json.title }}\n{{ $json.content }}\n{{ $json.formattedText }}",
+        "additionalFields": {
+          "disable_web_page_preview": false,
+          "parse_mode": "=HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -46544,
+        8288
+      ],
+      "id": "eb2fd74a-1419-4e7c-a6d3-ccb88ca61d34",
+      "name": "Send Message",
+      "webhookId": "891441b4-f3ed-42ae-a7fa-9084e88d33fe",
+      "credentials": {
+        "telegramApi": {
+          "id": "w3HIcBgC88omBsJ7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtMinute": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -48080,
+        8192
+      ],
+      "id": "e16c9308-b2ab-4fc1-8603-f4ecad8e11af",
+      "name": "Schedule Trigger2"
+    },
+    {
+      "parameters": {
+        "url": "https://wesh.ir/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -47872,
+        8192
+      ],
+      "id": "6e0815a6-5f05-4c82-9b8f-27bac379cb76",
+      "name": "RSS Read2"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.link }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9,fa;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -47424,
+        8192
+      ],
+      "id": "19f7f9dc-0a4b-45db-9ccc-d06ed3dbdc7f",
+      "name": "HTTP Request4"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Decode Link": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML Extract": {
+      "main": [
+        [
+          {
+            "node": "Format Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message": {
+      "main": [
+        [
+          {
+            "node": "Check Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Image": {
+      "main": [
+        [
+          {
+            "node": "Send Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger2": {
+      "main": [
+        [
+          {
+            "node": "RSS Read2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read2": {
+      "main": [
+        [
+          {
+            "node": "Decode Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request4": {
+      "main": [
+        [
+          {
+            "node": "HTML Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9ecd7fcd-c430-42fe-b6db-7b297803055a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e9ab7552981b4061a4ecd9f94dfb88c0d9ea8398e961467ddb816643976354e1"
+  },
+  "id": "2oVqZwqOndyErqhS",
+  "tags": []
+}
