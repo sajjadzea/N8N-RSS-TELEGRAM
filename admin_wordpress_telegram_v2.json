@@ -75,16 +75,11 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=AIzaSyDjuVZgrG_jwRm1qGcvW2IpW4qAjis3dD4",
+        "authentication": "none",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "contents",
-              "value": "={{ [{ \"parts\": [{ \"text\": $json.aiPrompt }] }] }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"contents\": [{ \"parts\": [{ \"text\": $json.aiPrompt }] }] }) }}",
         "options": {
           "timeout": 30000
         }
