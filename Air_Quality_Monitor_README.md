@@ -69,12 +69,25 @@ TELEGRAM_CHAT_ID=@your_channel_or_chat_id
 
 ### گام 3: تنظیم Environment Variables
 
-در فایل `.env` یا تنظیمات n8n:
+**روش 1: استفاده از فایل .env.example موجود**
+
+1. فایل `.env.example` را کپی کنید و نام آن را به `.env` تغییر دهید
+2. توکن Bearer قبلاً در فایل قرار داده شده است
+3. فقط مقدار `TELEGRAM_CHAT_ID` را با شناسه کانال/چت خود جایگزین کنید
+
+**روش 2: تنظیم مستقیم در n8n**
+
+در n8n به مسیر زیر بروید:
+- Settings → Environments → Add Variable
+
+متغیرهای مورد نیاز:
 
 ```env
-AQMS_BEARER=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+AQMS_BEARER=PD-jvbkAgKdeLFivtcSyxsJxt3WG94u59PMTNWccp9EXI7yO5Zg6ET8I2p0gACOpDbI6jdFVkl2pVZPwhuxZFWTo5W67YK9liE9sAcJWqzK30TmD-XMYKUUgUiXgA1PrytYyTsuTUF72NmZ7RorFLueMJNGrywYuUhAv0XRbLIcFQH123JCvahFzU29HF9SGVu-fAVx68mVzQlwdcfjSfM6CFaLuWdBg6VK5bWKUV837jv7nTESLate0huP7_HVdQ3F8kwR_0_TNdmocePsfb4KaNLl9zgzfoyoE5aSK6JDGJvVZ3Zb6_jEQ5mdVlQbj
 TELEGRAM_CHAT_ID=@your_channel
 ```
+
+**⚠️ نکته امنیتی**: این توکن برای استفاده شخصی شما است. آن را با دیگران به اشتراک نگذارید.
 
 ### گام 4: فعال‌سازی Workflow
 
