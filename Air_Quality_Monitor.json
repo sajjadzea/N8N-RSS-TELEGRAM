@@ -1,0 +1,249 @@
+{
+  "name": "Air Quality Monitor - Khorasan Razavi",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger-1",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://aqms.doe.ir/Service/api/v2/Station/GetStationsByStateId/?StateId=8",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.AQMS_BEARER}}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http-stations-1",
+      "name": "Get Stations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://aqms.doe.ir/Service/api/v2/AQI/Get/?StateId=8",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.AQMS_BEARER}}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http-aqi-1",
+      "name": "Get AQI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ورودی‌ها: items[0] از Get Stations، items[1] از Get AQI\n// n8n passes inputs as items from multiple nodes in one array; we'll extract them from $input.all()\nconst inputs = $input.all();\n\n// Helper: normalize persian digits\nfunction normDigits(s){\n  if(s===null || s===undefined) return s;\n  return String(s).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));\n}\n\nconst stations = inputs.find(i=>i.json && Array.isArray(i.json))?.json || (inputs[0] && inputs[0].json) || [];\n// Because of n8n structure, better to fetch by node name:\nconst stationsNode = $input.item.json; // fallback — but we'll also try using $items(\"Get Stations\")\nlet stArr = [];\ntry { stArr = $items(\"Get Stations\").map(x=>x.json); } catch(e){ stArr = stations; }\n\nlet aqArr = [];\ntry { aqArr = $items(\"Get AQI\").map(x=>x.json); } catch(e){ aqArr = []; }\n\n// Build index by StationId if present\nconst idxById = {};\nconst idxByName = {};\nstArr.forEach(s=>{\n  const id = s.StationId || s.stationId || s.Id || s.id || s.stationCode || s.code;\n  const name = s.StationName || s.stationName || s.name || s.title;\n  if(id) idxById[String(id)] = s;\n  if(name) idxByName[String(name).trim()] = s;\n});\n\nfunction getId(obj){\n  return obj.StationId || obj.stationId || obj.Id || obj.id || obj.stationCode || obj.code || null;\n}\nfunction getName(obj){\n  return obj.StationName || obj.stationName || obj.name || obj.title || null;\n}\n\nconst merged = (Array.isArray(aqArr) ? aqArr : []).map(a=>{\n  const sid = getId(a);\n  const name = getName(a);\n  const meta = (sid && idxById[sid]) || (name && idxByName[String(name).trim()]) || {};\n  const aqi_now = a.currentAqi || a.aqiNow || a.aqi_now || a.AQI || null;\n  const aqi_today = a.todayAqi || a.aqiToday || a.aqi_today || null;\n  const parseIntSafe = v => {\n    if(v===null || v===undefined) return null;\n    const n = normDigits(v);\n    const m = String(n).match(/\\d+/);\n    return m ? parseInt(m[0],10) : null;\n  };\n\n  return {\n    station_id: sid || meta.StationId || meta.stationId || null,\n    station: meta.StationName || meta.stationName || meta.name || name || \"نامشخص\",\n    lat: meta.latitude || meta.lat || meta.Latitude || null,\n    lon: meta.longitude || meta.lon || meta.lng || null,\n    region: meta.region || meta.city || meta.county || null,\n    aqi_now: parseIntSafe(aqi_now),\n    aqi_today: parseIntSafe(aqi_today),\n    category: a.category || a.aqiCategory || a.categoryName || null,\n    pollutant: a.dominantPollutant || a.pollutant || null\n  };\n});\n\n// Build summary for message: top worst stations (sorted by aqi_now desc)\nconst sorted = merged.slice().filter(s=>s.aqi_now!==null).sort((a,b)=>b.aqi_now - a.aqi_now);\nconst top5 = sorted.slice(0,5);\n\nconst now = new Date().toLocaleString('fa-IR'); // Persian locale if server supports\nconst summary = {\n  updated_at: new Date().toISOString(),\n  total_stations: merged.length,\n  top5: top5\n};\n\n// Prepare message text (Markdown)\nfunction persianNumber(n){\n  return String(n).replace(/\\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);\n}\n\nlet message = `*شاخص کیفیت هوا — خلاصه (خراسان رضوی)*\\nزمان بروزرسانی: ${now}\\nتعداد ایستگاه‌ها: ${merged.length}\\n\\n*پنج ایستگاه با بدترین وضعیت (AQI):*\\n`;\n\ntop5.forEach((s,i)=>{\n  message += `${i+1}. *${s.station}* — شاخص: *${persianNumber(s.aqi_now ?? \"-\")}*`;\n  if(s.pollutant) message += ` — آلاینده‌ی غالب: ${s.pollutant}`;\n  message += `\\n`;\n});\n\nmessage += `\\n_پیام خودکار — هر ساعت به‌روزرسانی می‌شود._`;\n\nreturn [{ json: { merged, summary, message } }];"
+      },
+      "id": "function-merge-1",
+      "name": "Merge Stations & AQI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// دریافت پیام و summary از ورودی\nconst input = items[0].json;\nconst updated_at = input.summary ? input.summary.updated_at : null;\n\n// دسترسی به static data\nconst global = this.getWorkflowStaticData('global') || {};\nconst last = global.last_sent_time || null;\n\n// اگر تازه است (مثلاً != last) ارسال کن و ذخیره کن\nif(updated_at && updated_at !== last){\n  global.last_sent_time = updated_at;\n  this.setWorkflowStaticData('global', global);\n  return [ { json: { send: true, message: input.message, summary: input.summary, merged: input.merged } } ];\n} else {\n  return [ { json: { send: false, message: input.message, summary: input.summary, merged: input.merged } } ];\n}"
+      },
+      "id": "function-dupcheck-1",
+      "name": "Duplicate Prevention",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.send }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-send-1",
+      "name": "Should Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "telegram-send-1",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Get Stations",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get AQI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Stations": {
+      "main": [
+        [
+          {
+            "node": "Merge Stations & AQI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get AQI": {
+      "main": [
+        [
+          {
+            "node": "Merge Stations & AQI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Stations & AQI": {
+      "main": [
+        [
+          {
+            "node": "Duplicate Prevention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate Prevention": {
+      "main": [
+        [
+          {
+            "node": "Should Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send?": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-30T00:00:00.000Z",
+  "versionId": "1"
+}
