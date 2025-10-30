@@ -1,0 +1,197 @@
+{
+  "name": "Air Quality Monitor - Mashhad (Payesh)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger-mashhad-1",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://payesh.mashhad.ir/api/Dashboard/Citizen",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-payesh-fetcher/1.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http-payesh-1",
+      "name": "Get Dashboard (Payesh)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Telegram Markdown message from payesh.mashhad.ir API response\nconst data = $input.item.json.data || $input.item.json; // safe access\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s){\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\nfunction fmtTime(iso){\n  try{\n    const d = new Date(iso);\n    return d.toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit', year:'numeric', month:'2-digit', day:'2-digit' });\n  } catch(e){ return iso || ''; }\n}\n\n// -------------- summary top (worst) stations --------------\nconst stations = data.stationsAQI || [];\n// stations array elements: { label: \"چمن\", value: { dateTime, stationId, aqi, influetialParameter, ... } }\nconst mapped = stations.map(s => {\n  const v = s.value || {};\n  return {\n    name: s.label || '',\n    aqi: Number(v.aqi || 0),\n    param: v.influetialParameter || '',\n    time: v.dateTime || ''\n  };\n});\n\n// sort desc by aqi\nmapped.sort((a,b)=>b.aqi - a.aqi);\nconst top5 = mapped.slice(0,5);\n\n// overall city aqi from root\nconst cityAqi = Number(data.aqi ?? data.instantAqi ?? 0);\nconst cityAqiFa = toFaDigits(cityAqi);\n\n// time\nconst measurementTime = data.airQualityMeasurementDateTime || (top5[0] && top5[0].time) || '';\nconst measurementTimeFmt = measurementTime ? fmtTime(measurementTime) : '—';\n\n// Build markdown message\nlet msg = `*شاخص کیفیت هوا — خلاصه (مشهد)*\\n`;\nmsg += `زمان اندازه‌گیری: ${measurementTimeFmt}\\n`;\nmsg += `شاخص کل شهر: *${cityAqiFa}* \\n\\n`;\nmsg += `*پنج ایستگاه با بدترین وضعیت:*\\n`;\n\ntop5.forEach((s,i)=>{\n  msg += `${i+1}. *${s.name}* — شاخص: *${toFaDigits(s.aqi)}*`;\n  if(s.param) msg += ` — آلاینده: ${s.param}`;\n  msg += `\\n`;\n});\n\n// Optional: include quick chart numbers (PM2.5 / PM10) from past24HourChanges (if present)\nif(data.past24HourChanges && data.past24HourChanges.cityAQI_Changes){\n  const last = data.past24HourChanges.cityAQI_Changes.slice(-1)[0];\n  if(last !== undefined){\n    msg += `\\nشاخص اخیر: ${toFaDigits(last)}\\n`;\n  }\n}\n\nmsg += `\\n_پیام خودکار — هر ساعت به‌روزرسانی می‌شود._`;\n\nreturn [{ json: { send: true, message: msg, meta: { cityAqi: cityAqi, measuredAt: measurementTime } } }];"
+      },
+      "id": "function-build-msg-1",
+      "name": "Build Telegram Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = items[0].json;\nconst meta = input.meta || {};\nconst measuredAt = meta.measuredAt || new Date().toISOString();\n\nconst global = this.getWorkflowStaticData('global') || {};\nconst lastSent = global.last_sent_measuredAt || null;\n\nif (lastSent === measuredAt){\n  // already sent\n  return [{ json: { send: false } }];\n}\n\n// update static data and send\nglobal.last_sent_measuredAt = measuredAt;\nthis.setWorkflowStaticData('global', global);\n\nreturn [{ json: { send: true, message: input.message } }];"
+      },
+      "id": "function-dedup-1",
+      "name": "Deduplicate / Send Control",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.send }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-send-mashhad-1",
+      "name": "Should Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "telegram-send-mashhad-1",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Get Dashboard (Payesh)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Dashboard (Payesh)": {
+      "main": [
+        [
+          {
+            "node": "Build Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate / Send Control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate / Send Control": {
+      "main": [
+        [
+          {
+            "node": "Should Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send?": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-30T00:00:00.000Z",
+  "versionId": "1"
+}
