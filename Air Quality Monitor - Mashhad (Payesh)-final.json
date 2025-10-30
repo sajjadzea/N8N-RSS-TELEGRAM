@@ -1,0 +1,195 @@
+{
+  "name": "Air Quality Monitor - Mashhad (Payesh)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "6bc42820-51d7-4e30-b37e-69ee6dcd4475",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1104,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://payesh.mashhad.ir/api/Dashboard/Citizen",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-payesh-fetcher/1.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "c0ad8acf-52e7-4741-8fd6-36963871ea47",
+      "name": "Get Dashboard (Payesh)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -880,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Telegram Markdown message from payesh.mashhad.ir API response\nconst data = $input.item.json.data || $input.item.json; // safe access\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s){\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\nfunction fmtTime(iso){\n  try{\n    const d = new Date(iso);\n    return d.toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit', year:'numeric', month:'2-digit', day:'2-digit' });\n  } catch(e){ return iso || ''; }\n}\n\n// -------------- summary top (worst) stations --------------\nconst stations = data.stationsAQI || [];\n// stations array elements: { label: \"چمن\", value: { dateTime, stationId, aqi, influetialParameter, ... } }\nconst mapped = stations.map(s => {\n  const v = s.value || {};\n  return {\n    name: s.label || '',\n    aqi: Number(v.aqi || 0),\n    param: v.influetialParameter || '',\n    time: v.dateTime || ''\n  };\n});\n\n// sort desc by aqi\nmapped.sort((a,b)=>b.aqi - a.aqi);\nconst top5 = mapped.slice(0,5);\n\n// overall city aqi from root\nconst cityAqi = Number(data.aqi ?? data.instantAqi ?? 0);\nconst cityAqiFa = toFaDigits(cityAqi);\n\n// time\nconst measurementTime = data.airQualityMeasurementDateTime || (top5[0] && top5[0].time) || '';\nconst measurementTimeFmt = measurementTime ? fmtTime(measurementTime) : '—';\n\n// Build markdown message\nlet msg = `*شاخص کیفیت هوا — خلاصه (مشهد)*\\n`;\nmsg += `زمان اندازه‌گیری: ${measurementTimeFmt}\\n`;\nmsg += `شاخص کل شهر: *${cityAqiFa}* \\n\\n`;\nmsg += `*پنج ایستگاه با بدترین وضعیت:*\\n`;\n\ntop5.forEach((s,i)=>{\n  msg += `${i+1}. *${s.name}* — شاخص: *${toFaDigits(s.aqi)}*`;\n  if(s.param) msg += ` — آلاینده: ${s.param}`;\n  msg += `\\n`;\n});\n\n// Optional: include quick chart numbers (PM2.5 / PM10) from past24HourChanges (if present)\nif(data.past24HourChanges && data.past24HourChanges.cityAQI_Changes){\n  const last = data.past24HourChanges.cityAQI_Changes.slice(-1)[0];\n  if(last !== undefined){\n    msg += `\\nشاخص اخیر: ${toFaDigits(last)}\\n`;\n  }\n}\n\nmsg += `\\n_پیام خودکار — هر ساعت به‌روزرسانی می‌شود._`;\n\nreturn [{ json: { send: true, message: msg, meta: { cityAqi: cityAqi, measuredAt: measurementTime } } }];"
+      },
+      "id": "db307a24-6343-405d-9cb8-99c53ef2e473",
+      "name": "Build Telegram Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = items[0].json;\nconst lastSent = $json[\"last_sent_measuredAt\"];  // از Workflow Data node قبلی\nconst measuredAt = input.meta?.measuredAt || new Date().toISOString();\n\nif (lastSent === measuredAt) {\n  return [{ json: { send: false } }];\n}\n\n// خروجی برای آپدیت Workflow Data\nreturn [\n  { json: { send: true, message: input.message, last_sent_measuredAt: measuredAt } }\n];\n"
+      },
+      "id": "c2ea4a38-74cd-420d-9cd1-933715bde05d",
+      "name": "Deduplicate / Send Control",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.send }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9e751a18-afc8-4ffe-beb6-1ec1ffb8ae9d",
+      "name": "Should Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "-1003207884746",
+        "text": "={{$json[\"message\"]}}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        16,
+        112
+      ],
+      "id": "18cea6f8-1d82-417d-bf60-726ffd884e89",
+      "name": "payeshhavaymashhad",
+      "webhookId": "8669ec39-5336-4fba-8d44-e08422deb0dd",
+      "credentials": {
+        "telegramApi": {
+          "id": "XQQsqYp1ELPoAiPW",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Get Dashboard (Payesh)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Dashboard (Payesh)": {
+      "main": [
+        [
+          {
+            "node": "Build Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate / Send Control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate / Send Control": {
+      "main": [
+        [
+          {
+            "node": "Should Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send?": {
+      "main": [
+        [
+          {
+            "node": "payeshhavaymashhad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "28ca7331-d946-4d6f-b4a7-ce57370b9094",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4e0628fc4b63415fcf4675b9a65d35e9aec0859861006249ad779582a713f03d"
+  },
+  "id": "LgECL8ZwULpglRKY",
+  "tags": []
+}
