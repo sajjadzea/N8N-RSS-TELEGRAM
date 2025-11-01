@@ -23,14 +23,18 @@
     },
     {
       "parameters": {
-        "method": "GET",
+        "method": "POST",
         "url": "https://test.nan.ac/api/v1/Need/GetAllNeeds",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Accept",
-              "value": "*/*"
+              "value": "application/json, text/plain, */*"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
             },
             {
               "name": "User-Agent",
@@ -46,6 +50,9 @@
             }
           ]
         },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "{}",
         "options": {
           "response": {
             "response": {
