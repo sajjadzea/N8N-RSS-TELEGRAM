@@ -138,6 +138,19 @@
       "id": "941451ca-9dcb-4920-bee2-a1e9aea0607d",
       "name": "Send to Telegram3",
       "webhookId": "ed101e8b-c783-4a37-a9f9-c9e9be3f4022"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🔍 نود Debug: نمایش دقیق تعداد آیتم‌های دریافتی\nconst items = $input.all();\n\nconsole.log(`\\n\\n`);\nconsole.log(`🔍 ========== DEBUG: تعداد آیتم‌های ورودی ==========`);\nconsole.log(`📊 تعداد کل items دریافتی: ${items.length}`);\nconsole.log(`====================================================\\n`);\n\n// نمایش اطلاعات هر آیتم\nitems.forEach((item, index) => {\n  console.log(`📦 آیتم ${index + 1}:`);\n  \n  // بررسی آیا این آیتم Summary است\n  if (item.json._summary) {\n    console.log(`   ⚠️ این یک آیتم Summary است`);\n    console.log(`   📊 totalItemsFromAPI: ${item.json.totalItemsFromAPI}`);\n    console.log(`   ✅ successfullyParsed: ${item.json.successfullyParsed}`);\n    console.log(`   💬 message: ${item.json.message}`);\n  } else if (item.json.error) {\n    console.log(`   ❌ این آیتم خطا دارد: ${item.json.error}`);\n  } else {\n    // نمایش فیلدهای کلیدی\n    console.log(`   🆔 ID: ${item.json.id || 'N/A'}`);\n    console.log(`   📝 Title: ${item.json.title ? item.json.title.substring(0, 50) + '...' : 'N/A'}`);\n    console.log(`   🏢 mainLogoName: ${item.json.mainLogoName || 'N/A'}`);\n  }\n  console.log(``);\n});\n\nconsole.log(`\\n🔍 ========== پایان DEBUG ==========\\n\\n`);\n\n// خروجی رو بدون تغییر برگردون\nreturn items;"
+      },
+      "id": "debug-item-count-12345",
+      "name": "🔍 Debug: Item Count",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        648,
+        192
+      ]
     }
   ],
   "pinData": {},
@@ -154,6 +167,17 @@
       ]
     },
     "Parse cURL Response": {
+      "main": [
+        [
+          {
+            "node": "🔍 Debug: Item Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Debug: Item Count": {
       "main": [
         [
           {
