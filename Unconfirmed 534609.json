@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "command": "=/usr/bin/wget --post-data='{}' --header='Accept: application/json, text/plain, */*' --header='Content-Type: application/json' --header='Origin: https://test.nan.ac' --header='Referer: https://test.nan.ac/' --header='User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' --header='Port: 512' -O- -q 'https://test.nan.ac/api/v1/Need/GetAllNeeds'"
+        "command": "=/usr/bin/wget --post-data='{\"pageSize\":1000,\"pageNumber\":1}' --header='Accept: application/json, text/plain, */*' --header='Content-Type: application/json' --header='Origin: https://test.nan.ac' --header='Referer: https://test.nan.ac/' --header='User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' --header='Port: 512' -O- -q 'https://test.nan.ac/api/v1/Need/GetAllNeeds'"
       },
       "id": "4cce2cda-33dd-4549-8a6a-ad3494bf4c2e",
       "name": "Fetch NAN Challenges (cURL)",
