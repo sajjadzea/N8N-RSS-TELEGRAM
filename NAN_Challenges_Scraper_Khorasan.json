@@ -23,74 +23,27 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://test.nan.ac/api/v1/Need/GetAllNeeds",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/json, text/plain, */*"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Origin",
-              "value": "https://test.nan.ac"
-            },
-            {
-              "name": "Referer",
-              "value": "https://test.nan.ac/"
-            },
-            {
-              "name": "User-Agent",
-              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            },
-            {
-              "name": "Accept-Encoding",
-              "value": "gzip, deflate, br"
-            },
-            {
-              "name": "Accept-Language",
-              "value": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7"
-            },
-            {
-              "name": "Sec-Fetch-Dest",
-              "value": "empty"
-            },
-            {
-              "name": "Sec-Fetch-Mode",
-              "value": "cors"
-            },
-            {
-              "name": "Sec-Fetch-Site",
-              "value": "same-origin"
-            },
-            {
-              "name": "Port",
-              "value": "512"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "body": "{}",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "autodetect"
-            }
-          }
-        }
+        "command": "curl -X POST 'https://test.nan.ac/api/v1/Need/GetAllNeeds' \\\n  -H 'Accept: application/json, text/plain, */*' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Origin: https://test.nan.ac' \\\n  -H 'Referer: https://test.nan.ac/' \\\n  -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' \\\n  -H 'Accept-Language: fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7' \\\n  -H 'Sec-Fetch-Dest: empty' \\\n  -H 'Sec-Fetch-Mode: cors' \\\n  -H 'Sec-Fetch-Site: same-origin' \\\n  -H 'Port: 512' \\\n  --data-raw '{}' \\\n  --compressed"
       },
-      "id": "http-request-nan",
-      "name": "Fetch NAN Challenges (API)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "bash-curl-nan",
+      "name": "Fetch NAN Challenges (cURL)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
       "position": [
         -880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// تبدیل خروجی cURL به JSON\nconst output = $input.item.json;\nconst stdout = output.stdout || output.data || '';\n\ntry {\n  const jsonData = JSON.parse(stdout);\n  return [{ json: jsonData }];\n} catch (error) {\n  return [{\n    json: {\n      error: 'Failed to parse JSON',\n      rawOutput: stdout,\n      errorMessage: error.message\n    }\n  }];\n}"
+      },
+      "id": "code-parse-curl",
+      "name": "Parse cURL Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
         300
       ]
     },
@@ -199,14 +152,25 @@
       "main": [
         [
           {
-            "node": "Fetch NAN Challenges Page",
+            "node": "Fetch NAN Challenges (cURL)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch NAN Challenges Page": {
+    "Fetch NAN Challenges (cURL)": {
+      "main": [
+        [
+          {
+            "node": "Parse cURL Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse cURL Response": {
       "main": [
         [
           {
