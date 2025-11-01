@@ -1,0 +1,256 @@
+{
+  "name": "NAN Challenges Scraper - Khorasan Razavi",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-nan",
+      "name": "Every 12 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://test.nan.ac/api/v1/Need/GetAllNeeds",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fa-IR,fa;q=0.9,en-US,en;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http-request-nan",
+      "name": "Fetch NAN Challenges (API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// پردازش داده‌های API و فیلتر کردن چالش‌های خراسان رضوی\nconst data = $input.item.json;\n\n// تابع تبدیل اعداد به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\nconst challenges = [];\n\ntry {\n  // پاسخ API مستقیماً یک آرایه است\n  const needsArray = Array.isArray(data) ? data : [];\n  \n  if (needsArray.length === 0) {\n    console.log('No data received from API');\n    return [{\n      json: {\n        success: false,\n        error: 'API returned empty array',\n        challenges: []\n      }\n    }];\n  }\n  \n  console.log(`Total needs received: ${needsArray.length}`);\n  \n  // فیلتر کردن چالش‌های خراسان رضوی\n  // چون provinceId وجود ندارد، بر اساس نام استان در متن جستجو می‌کنیم\n  needsArray.forEach(need => {\n    // فیلدهایی که ممکنه اسم استان داخلشون باشه\n    const mainLogoName = need.mainLogoName || '';\n    const title = need.title || '';\n    const secondaryLogoName = need.secondaryLogoName || '';\n    \n    // جستجو برای خراسان رضوی\n    const searchText = `${mainLogoName} ${title} ${secondaryLogoName}`.toLowerCase();\n    \n    const isKhorasanRazavi = \n      searchText.includes('خراسان رضوی') ||\n      searchText.includes('خراسان‌رضوی') ||\n      searchText.includes('مشهد') ||\n      searchText.includes('khorasan razavi');\n    \n    if (isKhorasanRazavi) {\n      // استخراج اطلاعات بر اساس ساختار واقعی API\n      const id = need.id || '';\n      const titleText = need.title || '';\n      const dor = need.dor || '';\n      \n      // استخراج پاداش از item1\n      const reward = need.item1?.text || '';\n      const rewardTooltip = need.item1?.tooltip || '';\n      \n      // استخراج تعداد ایده از item2\n      const ideasCount = need.item2?.text || '0';\n      \n      // استخراج مهلت از item3\n      const deadline = need.item3?.text || dor || '';\n      \n      // استخراج تعداد بازدید از item4\n      const viewCount = need.item4?.text || '0';\n      \n      // سازمان\n      const organization = mainLogoName || 'NAN';\n      \n      // لینک\n      const link = `https://nan.ac/challenges/${id}`;\n      \n      challenges.push({\n        id: id,\n        title: titleText,\n        province: 'خراسان رضوی',\n        organization: organization,\n        deadline: deadline,\n        reward: reward,\n        rewardType: rewardTooltip,\n        ideasCount: ideasCount,\n        viewCount: viewCount,\n        dor: dor,\n        ribbon: need.ribbon || null,\n        stamp: need.stamp || null,\n        link: link,\n        mainLogoName: mainLogoName,\n        secondaryLogoName: secondaryLogoName || null\n      });\n    }\n  });\n  \n  console.log(`Khorasan Razavi challenges found: ${challenges.length}`);\n  \n} catch (error) {\n  return [{\n    json: {\n      success: false,\n      error: error.message,\n      errorStack: error.stack,\n      challenges: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    challenges: challenges,\n    count: challenges.length,\n    province: 'خراسان رضوی',\n    note: 'فیلتر شده بر اساس جستجوی متنی در نام سازمان و عنوان'\n  }\n}];"
+      },
+      "id": "code-parse-nan",
+      "name": "Parse & Filter Khorasan Challenges",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// مقایسه با داده‌های قبلی و تشخیص تغییرات\nconst data = $input.item.json;\nconst currentChallenges = data.challenges || [];\n\nconst workflowStaticData = $getWorkflowStaticData('global');\nconst previousChallenges = workflowStaticData.nanChallenges || {};\n\nconst newChallenges = [];\nconst updatedChallenges = [];\nconst unchangedChallenges = [];\n\nconst currentChallengesMap = {};\ncurrentChallenges.forEach(challenge => {\n  const key = challenge.title.trim();\n  currentChallengesMap[key] = challenge;\n});\n\ncurrentChallenges.forEach(challenge => {\n  const key = challenge.title.trim();\n  const prevChallenge = previousChallenges[key];\n  \n  if (!prevChallenge) {\n    newChallenges.push({\n      ...challenge,\n      changeType: 'new'\n    });\n  } else {\n    const changes = [];\n    \n    if (prevChallenge.deadline !== challenge.deadline) {\n      changes.push({\n        field: 'مهلت',\n        oldValue: prevChallenge.deadline,\n        newValue: challenge.deadline\n      });\n    }\n    \n    if (prevChallenge.description !== challenge.description) {\n      changes.push({\n        field: 'توضیحات',\n        oldValue: prevChallenge.description,\n        newValue: challenge.description\n      });\n    }\n    \n    if (changes.length > 0) {\n      updatedChallenges.push({\n        ...challenge,\n        changeType: 'updated',\n        changes: changes\n      });\n    } else {\n      unchangedChallenges.push({\n        ...challenge,\n        changeType: 'unchanged'\n      });\n    }\n  }\n});\n\nworkflowStaticData.nanChallenges = currentChallengesMap;\nworkflowStaticData.lastCheckTime = new Date().toISOString();\n\nreturn [{\n  json: {\n    success: true,\n    newCount: newChallenges.length,\n    updatedCount: updatedChallenges.length,\n    unchangedCount: unchangedChallenges.length,\n    totalCount: currentChallenges.length,\n    newChallenges: newChallenges,\n    updatedChallenges: updatedChallenges,\n    unchangedChallenges: unchangedChallenges,\n    hasChanges: (newChallenges.length > 0 || updatedChallenges.length > 0)\n  }\n}];"
+      },
+      "id": "code-detect-nan",
+      "name": "Detect Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ساخت پیام‌های Telegram\nconst data = $input.item.json;\nconst newChallenges = data.newChallenges || [];\nconst updatedChallenges = data.updatedChallenges || [];\n\nif (!data.hasChanges) {\n  return [{\n    json: {\n      send: false,\n      message: '✅ *بررسی انجام شد*\\n\\nهیچ چالش جدید یا به‌روزرسانی در خراسان رضوی یافت نشد.',\n      messageType: 'no_changes'\n    }\n  }];\n}\n\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\nconst messages = [];\n\n// پیام خلاصه\nlet summaryMsg = `🔔 *چالش‌های نوآوری — خراسان رضوی*\\n\\n`;\nif (newChallenges.length > 0) {\n  summaryMsg += `🆕 چالش‌های جدید: ${toFaDigits(newChallenges.length)}\\n`;\n}\nif (updatedChallenges.length > 0) {\n  summaryMsg += `🔄 چالش‌های به‌روزرسانی شده: ${toFaDigits(updatedChallenges.length)}\\n`;\n}\nsummaryMsg += `\\n📅 زمان بررسی: ${new Date().toLocaleString('fa-IR')}\\n\\n`;\nsummaryMsg += `_در پیام‌های بعدی جزئیات ارسال می‌شود._`;\n\nmessages.push({\n  json: {\n    send: true,\n    message: summaryMsg,\n    messageType: 'summary',\n    index: 0\n  }\n});\n\n// پیام برای چالش‌های جدید\nnewChallenges.forEach((challenge, index) => {\n  let msg = `🆕 *چالش نوآوری جدید*\\n\\n`;\n  \n  if (challenge.title) {\n    msg += `*📌 عنوان:*\\n${challenge.title}\\n\\n`;\n  }\n  \n  if (challenge.organization) {\n    msg += `*🏢 سازمان:*\\n${challenge.organization}\\n\\n`;\n  }\n  \n  if (challenge.reward) {\n    msg += `*💰 ${challenge.rewardType || 'پاداش'}:*\\n${challenge.reward}\\n\\n`;\n  }\n  \n  if (challenge.deadline) {\n    msg += `*⏰ مهلت:*\\n${challenge.deadline}\\n\\n`;\n  }\n  \n  if (challenge.ideasCount) {\n    msg += `*💡 تعداد ایده:* ${toFaDigits(challenge.ideasCount)}\\n`;\n  }\n  \n  if (challenge.viewCount) {\n    msg += `*👁 تعداد بازدید:* ${toFaDigits(challenge.viewCount)}\\n`;\n  }\n  \n  msg += `*📍 استان:* خراسان رضوی\\n\\n`;\n  \n  if (challenge.link) {\n    msg += `🔗 [مشاهده جزئیات و ثبت ایده](${challenge.link})\\n\\n`;\n  }\n  \n  msg += `_🤖 چالش جدید شماره ${toFaDigits(index + 1)} از ${toFaDigits(newChallenges.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      messageType: 'new',\n      challenge: challenge,\n      index: messages.length\n    }\n  });\n});\n\n// پیام برای چالش‌های به‌روزرسانی شده\nupdatedChallenges.forEach((challenge, index) => {\n  let msg = `🔄 *به‌روزرسانی چالش نوآوری*\\n\\n`;\n  \n  if (challenge.title) {\n    msg += `*📌 عنوان:*\\n${challenge.title}\\n\\n`;\n  }\n  \n  msg += `*✏️ تغییرات:*\\n`;\n  \n  challenge.changes.forEach(change => {\n    msg += `\\n▫️ *${change.field}*\\n`;\n    if (change.field === 'مهلت') {\n      msg += `   قبلی: ${toFaDigits(change.oldValue)}\\n`;\n      msg += `   جدید: ${toFaDigits(change.newValue)} ✨\\n`;\n    } else {\n      msg += `   قبلی: ${change.oldValue}\\n`;\n      msg += `   جدید: ${change.newValue} ✨\\n`;\n    }\n  });\n  \n  msg += `\\n*📊 اطلاعات فعلی:*\\n\\n`;\n  \n  if (challenge.organization) {\n    msg += `*🏢 سازمان:* ${challenge.organization}\\n`;\n  }\n  \n  if (challenge.deadline) {\n    msg += `*⏰ مهلت:* ${toFaDigits(challenge.deadline)}\\n`;\n  }\n  \n  if (challenge.link) {\n    msg += `\\n🔗 [مشاهده جزئیات](${challenge.link})\\n\\n`;\n  }\n  \n  msg += `_🤖 به‌روزرسانی شماره ${toFaDigits(index + 1)} از ${toFaDigits(updatedChallenges.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      messageType: 'updated',\n      challenge: challenge,\n      index: messages.length\n    }\n  });\n});\n\nreturn messages;"
+      },
+      "id": "code-format-nan",
+      "name": "Format Telegram Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.send }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-node-nan",
+      "name": "Should Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        16,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "wait-node-nan",
+      "name": "Wait Between Messages",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        300
+      ],
+      "webhookId": "wait-nan-messages"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID_HERE",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        496,
+        300
+      ],
+      "id": "telegram-node-nan",
+      "name": "Send to Telegram",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 12 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch NAN Challenges Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch NAN Challenges Page": {
+      "main": [
+        [
+          {
+            "node": "Parse & Filter Khorasan Challenges",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Filter Khorasan Challenges": {
+      "main": [
+        [
+          {
+            "node": "Detect Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Changes": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram Messages": {
+      "main": [
+        [
+          {
+            "node": "Should Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send?": {
+      "main": [
+        [
+          {
+            "node": "Wait Between Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Between Messages": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "nan-scraper-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "NANChallengesScraper",
+  "tags": [
+    "scraping",
+    "challenges",
+    "nan",
+    "khorasan",
+    "telegram"
+  ]
+}
