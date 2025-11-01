@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse HTML and extract research subjects data\nconst html = $input.item.json;\nconst htmlContent = typeof html === 'string' ? html : html.data || '';\n\n// تابع برای تبدیل اعداد انگلیسی به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\n// استخراج داده‌ها از جدول HTML\n// فرض می‌کنیم جدول در صفحه وجود دارد\nconst subjects = [];\n\ntry {\n  // پیدا کردن تمام سطرهای جدول با استفاده از regex\n  // این regex سطرهای <tr> را پیدا می‌کند\n  const tableRowRegex = /<tr[^>]*>(.*?)<\\/tr>/gis;\n  const cellRegex = /<td[^>]*>(.*?)<\\/td>/gis;\n  const rows = htmlContent.match(tableRowRegex) || [];\n  \n  // پردازش سطرها (از سطر دوم شروع می‌کنیم چون سطر اول header است)\n  for (let i = 1; i < rows.length; i++) {\n    const row = rows[i];\n    const cells = [];\n    let match;\n    \n    // استخراج تمام سلول‌ها\n    const tempCellRegex = /<td[^>]*>(.*?)<\\/td>/gis;\n    while ((match = tempCellRegex.exec(row)) !== null) {\n      // پاک کردن تگ‌های HTML و فضای خالی اضافی\n      let cellContent = match[1]\n        .replace(/<[^>]+>/g, '') // حذف تگ‌های HTML\n        .replace(/&nbsp;/g, ' ') // تبدیل &nbsp; به فضای معمولی\n        .replace(/&quot;/g, '\"') // تبدیل &quot; به \"\n        .replace(/&amp;/g, '&') // تبدیل &amp; به &\n        .trim();\n      cells.push(cellContent);\n    }\n    \n    // اگر سطر حداقل 4 ستون داشته باشد (عنوان، نوع، مهلت، جزئیات)\n    if (cells.length >= 4) {\n      subjects.push({\n        title: cells[0] || '',\n        type: cells[1] || '',\n        deadline: cells[2] || '',\n        details: cells[3] || ''\n      });\n    }\n  }\n  \n  // اگر با regex موفق نشدیم، از روش دیگری استفاده می‌کنیم\n  if (subjects.length === 0) {\n    // سعی می‌کنیم با pattern دیگری جدول را پیدا کنیم\n    // این بخش می‌تواند بعداً با توجه به ساختار واقعی سایت تنظیم شود\n    \n    // برای تست، یک آیتم نمونه اضافه می‌کنیم\n    subjects.push({\n      title: 'نمونه موضوع تحقیقاتی',\n      type: 'پایان‌نامه کارشناسی ارشد',\n      deadline: '۱۴۰۳/۰۸/۱۵',\n      details: 'جزئیات در سایت'\n    });\n  }\n} catch (error) {\n  // در صورت بروز خطا، یک پیام خطا برمی‌گردانیم\n  return [{\n    json: {\n      success: false,\n      error: error.message,\n      subjects: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    subjects: subjects,\n    count: subjects.length\n  }\n}];"
+        "jsCode": "// Parse HTML and extract research subjects data\nconst html = $input.item.json;\nconst htmlContent = typeof html === 'string' ? html : html.data || '';\n\n// تابع برای تبدیل اعداد انگلیسی به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\n// استخراج داده‌ها از جدول HTML\nconst subjects = [];\n\ntry {\n  // پیدا کردن تمام سطرهای جدول با استفاده از regex\n  const tableRowRegex = /<tr[^>]*>(.*?)<\\/tr>/gis;\n  const rows = htmlContent.match(tableRowRegex) || [];\n  \n  // پردازش سطرها (از سطر دوم شروع می‌کنیم چون سطر اول header است)\n  for (let i = 1; i < rows.length; i++) {\n    const row = rows[i];\n    const cells = [];\n    let match;\n    \n    // استخراج تمام سلول‌ها\n    const tempCellRegex = /<td[^>]*>(.*?)<\\/td>/gis;\n    while ((match = tempCellRegex.exec(row)) !== null) {\n      // پاک کردن تگ‌های HTML و فضای خالی اضافی\n      let cellContent = match[1]\n        .replace(/<[^>]+>/g, '') // حذف تگ‌های HTML\n        .replace(/&nbsp;/g, ' ') // تبدیل &nbsp; به فضای معمولی\n        .replace(/&quot;/g, '\"') // تبدیل &quot; به \"\n        .replace(/&amp;/g, '&') // تبدیل &amp; به &\n        .replace(/&#\\d+;/g, '') // حذف کاراکترهای HTML entity\n        .trim();\n      cells.push(cellContent);\n    }\n    \n    // اگر سطر حداقل 4 ستون داشته باشد (عنوان، نوع، مهلت، جزئیات)\n    if (cells.length >= 4) {\n      subjects.push({\n        title: cells[0] || '',\n        type: cells[1] || '',\n        deadline: cells[2] || '',\n        details: cells[3] || ''\n      });\n    }\n  }\n  \n  // اگر با regex موفق نشدیم، از روش دیگری استفاده می‌کنیم\n  if (subjects.length === 0) {\n    // برای تست، یک آیتم نمونه اضافه می‌کنیم\n    subjects.push({\n      title: 'نمونه موضوع تحقیقاتی',\n      type: 'پایان‌نامه کارشناسی ارشد',\n      deadline: '۱۴۰۳/۰۸/۱۵',\n      details: 'جزئیات در سایت'\n    });\n  }\n} catch (error) {\n  // در صورت بروز خطا، یک پیام خطا برمی‌گردانیم\n  return [{\n    json: {\n      success: false,\n      error: error.message,\n      subjects: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    subjects: subjects,\n    count: subjects.length\n  }\n}];"
       },
       "id": "code-parse-001",
       "name": "Parse HTML & Extract Data",
@@ -85,14 +85,27 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build formatted Telegram messages from research subjects\nconst data = $input.item.json;\nconst subjects = data.subjects || [];\n\nif (!data.success || subjects.length === 0) {\n  return [{\n    json: {\n      send: false,\n      message: '⚠️ *هیچ موضوع تحقیقاتی جدیدی یافت نشد*\\n\\nلطفاً بعداً دوباره بررسی کنید.',\n      count: 0\n    }\n  }];\n}\n\n// تابع تبدیل اعداد به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\n// ساخت پیام برای هر موضوع تحقیقاتی\nconst messages = [];\n\nsubjects.forEach((subject, index) => {\n  let msg = `📚 *موضوع تحقیقاتی جدید*\\n\\n`;\n  \n  // عنوان\n  if (subject.title) {\n    msg += `*📌 عنوان:*\\n${subject.title}\\n\\n`;\n  }\n  \n  // نوع\n  if (subject.type) {\n    msg += `*🎓 نوع:*\\n${subject.type}\\n\\n`;\n  }\n  \n  // مهلت ثبت پروپوزال\n  if (subject.deadline) {\n    const deadlineFa = toFaDigits(subject.deadline);\n    msg += `*⏰ مهلت ثبت پروپوزال:*\\n${deadlineFa}\\n\\n`;\n  }\n  \n  // جزئیات\n  if (subject.details) {\n    msg += `*📋 جزئیات:*\\n${subject.details}\\n\\n`;\n  }\n  \n  // لینک سایت\n  msg += `🔗 [مشاهده در سایت](https://research.abfamashhad.ir/SubjectsList)\\n\\n`;\n  \n  msg += `_🤖 پیام خودکار — شماره ${toFaDigits(index + 1)} از ${toFaDigits(subjects.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      subject: subject,\n      index: index + 1,\n      total: subjects.length\n    }\n  });\n});\n\n// اضافه کردن یک پیام خلاصه در ابتدا\nconst summaryMsg = `🔔 *موضوعات تحقیقاتی جدید — آبفای مشهد*\\n\\n` +\n  `تعداد: ${toFaDigits(subjects.length)} موضوع\\n` +\n  `تاریخ: ${new Date().toLocaleString('fa-IR')}\\n\\n` +\n  `_در پیام‌های بعدی جزئیات هر موضوع ارسال می‌شود._`;\n\nmessages.unshift({\n  json: {\n    send: true,\n    message: summaryMsg,\n    subject: null,\n    index: 0,\n    total: subjects.length\n  }\n});\n\nreturn messages;"
+        "jsCode": "// مقایسه داده‌های جدید با داده‌های قبلی و تشخیص تغییرات\nconst data = $input.item.json;\nconst currentSubjects = data.subjects || [];\n\n// دسترسی به Workflow Static Data برای ذخیره‌سازی دائمی\nconst workflowStaticData = this.getWorkflowStaticData('global');\nconst previousSubjects = workflowStaticData.researchSubjects || {};\n\n// آرایه‌هایی برای ذخیره موضوعات جدید و به‌روزرسانی شده\nconst newSubjects = [];\nconst updatedSubjects = [];\nconst unchangedSubjects = [];\n\n// ساخت یک Map از موضوعات فعلی برای دسترسی سریع\nconst currentSubjectsMap = {};\ncurrentSubjects.forEach(subject => {\n  const key = subject.title.trim();\n  currentSubjectsMap[key] = subject;\n});\n\n// بررسی هر موضوع فعلی\ncurrentSubjects.forEach(subject => {\n  const key = subject.title.trim();\n  const prevSubject = previousSubjects[key];\n  \n  if (!prevSubject) {\n    // موضوع جدید است\n    newSubjects.push({\n      ...subject,\n      changeType: 'new'\n    });\n  } else {\n    // بررسی تغییرات در فیلدها\n    const changes = [];\n    \n    if (prevSubject.type !== subject.type) {\n      changes.push({\n        field: 'نوع',\n        oldValue: prevSubject.type,\n        newValue: subject.type\n      });\n    }\n    \n    if (prevSubject.deadline !== subject.deadline) {\n      changes.push({\n        field: 'مهلت ثبت پروپوزال',\n        oldValue: prevSubject.deadline,\n        newValue: subject.deadline\n      });\n    }\n    \n    if (prevSubject.details !== subject.details) {\n      changes.push({\n        field: 'جزئیات',\n        oldValue: prevSubject.details,\n        newValue: subject.details\n      });\n    }\n    \n    if (changes.length > 0) {\n      // موضوع به‌روزرسانی شده است\n      updatedSubjects.push({\n        ...subject,\n        changeType: 'updated',\n        changes: changes\n      });\n    } else {\n      // بدون تغییر\n      unchangedSubjects.push({\n        ...subject,\n        changeType: 'unchanged'\n      });\n    }\n  }\n});\n\n// به‌روزرسانی داده‌های ذخیره شده\nworkflowStaticData.researchSubjects = currentSubjectsMap;\nworkflowStaticData.lastCheckTime = new Date().toISOString();\n\n// ساخت خروجی\nreturn [{\n  json: {\n    success: true,\n    newCount: newSubjects.length,\n    updatedCount: updatedSubjects.length,\n    unchangedCount: unchangedSubjects.length,\n    totalCount: currentSubjects.length,\n    newSubjects: newSubjects,\n    updatedSubjects: updatedSubjects,\n    unchangedSubjects: unchangedSubjects,\n    hasChanges: (newSubjects.length > 0 || updatedSubjects.length > 0)\n  }\n}];"
+      },
+      "id": "code-compare-001",
+      "name": "Detect Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ساخت پیام‌های Telegram برای موضوعات جدید و به‌روزرسانی شده\nconst data = $input.item.json;\nconst newSubjects = data.newSubjects || [];\nconst updatedSubjects = data.updatedSubjects || [];\n\nif (!data.hasChanges) {\n  // هیچ تغییری وجود ندارد\n  return [{\n    json: {\n      send: false,\n      message: '✅ *بررسی انجام شد*\\n\\nهیچ موضوع جدید یا به‌روزرسانی یافت نشد.',\n      messageType: 'no_changes'\n    }\n  }];\n}\n\n// تابع تبدیل اعداد به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\nconst messages = [];\n\n// ایجاد پیام خلاصه\nlet summaryMsg = `🔔 *به‌روزرسانی موضوعات تحقیقاتی — آبفای مشهد*\\n\\n`;\nif (newSubjects.length > 0) {\n  summaryMsg += `🆕 موضوعات جدید: ${toFaDigits(newSubjects.length)}\\n`;\n}\nif (updatedSubjects.length > 0) {\n  summaryMsg += `🔄 موضوعات به‌روزرسانی شده: ${toFaDigits(updatedSubjects.length)}\\n`;\n}\nsummaryMsg += `\\n📅 زمان بررسی: ${new Date().toLocaleString('fa-IR')}\\n\\n`;\nsummaryMsg += `_در پیام‌های بعدی جزئیات ارسال می‌شود._`;\n\nmessages.push({\n  json: {\n    send: true,\n    message: summaryMsg,\n    messageType: 'summary',\n    index: 0\n  }\n});\n\n// پیام برای موضوعات جدید\nnewSubjects.forEach((subject, index) => {\n  let msg = `🆕 *موضوع تحقیقاتی جدید*\\n\\n`;\n  \n  if (subject.title) {\n    msg += `*📌 عنوان:*\\n${subject.title}\\n\\n`;\n  }\n  \n  if (subject.type) {\n    msg += `*🎓 نوع:*\\n${subject.type}\\n\\n`;\n  }\n  \n  if (subject.deadline) {\n    const deadlineFa = toFaDigits(subject.deadline);\n    msg += `*⏰ مهلت ثبت پروپوزال:*\\n${deadlineFa}\\n\\n`;\n  }\n  \n  if (subject.details) {\n    msg += `*📋 جزئیات:*\\n${subject.details}\\n\\n`;\n  }\n  \n  msg += `🔗 [مشاهده در سایت](https://research.abfamashhad.ir/SubjectsList)\\n\\n`;\n  msg += `_🤖 موضوع جدید شماره ${toFaDigits(index + 1)} از ${toFaDigits(newSubjects.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      messageType: 'new',\n      subject: subject,\n      index: messages.length\n    }\n  });\n});\n\n// پیام برای موضوعات به‌روزرسانی شده\nupdatedSubjects.forEach((subject, index) => {\n  let msg = `🔄 *به‌روزرسانی موضوع تحقیقاتی*\\n\\n`;\n  \n  if (subject.title) {\n    msg += `*📌 عنوان:*\\n${subject.title}\\n\\n`;\n  }\n  \n  msg += `*✏️ تغییرات:*\\n`;\n  \n  subject.changes.forEach(change => {\n    msg += `\\n▫️ *${change.field}*\\n`;\n    \n    if (change.field === 'مهلت ثبت پروپوزال') {\n      msg += `   قبلی: ${toFaDigits(change.oldValue)}\\n`;\n      msg += `   جدید: ${toFaDigits(change.newValue)} ✨\\n`;\n    } else {\n      msg += `   قبلی: ${change.oldValue}\\n`;\n      msg += `   جدید: ${change.newValue} ✨\\n`;\n    }\n  });\n  \n  msg += `\\n*📊 اطلاعات کامل فعلی:*\\n\\n`;\n  \n  if (subject.type) {\n    msg += `*🎓 نوع:* ${subject.type}\\n`;\n  }\n  \n  if (subject.deadline) {\n    msg += `*⏰ مهلت:* ${toFaDigits(subject.deadline)}\\n`;\n  }\n  \n  if (subject.details) {\n    msg += `*📋 جزئیات:* ${subject.details}\\n`;\n  }\n  \n  msg += `\\n🔗 [مشاهده در سایت](https://research.abfamashhad.ir/SubjectsList)\\n\\n`;\n  msg += `_🤖 به‌روزرسانی شماره ${toFaDigits(index + 1)} از ${toFaDigits(updatedSubjects.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      messageType: 'updated',\n      subject: subject,\n      index: messages.length\n    }\n  });\n});\n\nreturn messages;"
       },
       "id": "code-format-001",
       "name": "Format Telegram Messages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -432,
+        -208,
         200
       ]
     },
@@ -113,7 +126,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -208,
+        16,
         200
       ]
     },
@@ -127,7 +140,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        32,
+        256,
         200
       ],
       "webhookId": "wait-between-messages-webhook"
@@ -143,7 +156,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        272,
+        496,
         200
       ],
       "id": "telegram-node-001",
@@ -181,6 +194,17 @@
       ]
     },
     "Parse HTML & Extract Data": {
+      "main": [
+        [
+          {
+            "node": "Detect Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Changes": {
       "main": [
         [
           {
@@ -229,7 +253,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "research-scraper-v1",
+  "versionId": "research-scraper-v2",
   "meta": {
     "templateCredsSetupCompleted": false
   },
@@ -238,6 +262,7 @@
     "scraping",
     "research",
     "telegram",
-    "abfa-mashhad"
+    "abfa-mashhad",
+    "change-detection"
   ]
 }
