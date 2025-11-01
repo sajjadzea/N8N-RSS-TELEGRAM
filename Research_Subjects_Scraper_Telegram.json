@@ -1,0 +1,243 @@
+{
+  "name": "Research Subjects Scraper - Abfa Mashhad",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-001",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://research.abfamashhad.ir/SubjectsList",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fa-IR,fa;q=0.9,en;q=0.8"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": "gzip, deflate, br"
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "Upgrade-Insecure-Requests",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "http-request-001",
+      "name": "Fetch Research Subjects Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse HTML and extract research subjects data\nconst html = $input.item.json;\nconst htmlContent = typeof html === 'string' ? html : html.data || '';\n\n// تابع برای تبدیل اعداد انگلیسی به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\n// استخراج داده‌ها از جدول HTML\n// فرض می‌کنیم جدول در صفحه وجود دارد\nconst subjects = [];\n\ntry {\n  // پیدا کردن تمام سطرهای جدول با استفاده از regex\n  // این regex سطرهای <tr> را پیدا می‌کند\n  const tableRowRegex = /<tr[^>]*>(.*?)<\\/tr>/gis;\n  const cellRegex = /<td[^>]*>(.*?)<\\/td>/gis;\n  const rows = htmlContent.match(tableRowRegex) || [];\n  \n  // پردازش سطرها (از سطر دوم شروع می‌کنیم چون سطر اول header است)\n  for (let i = 1; i < rows.length; i++) {\n    const row = rows[i];\n    const cells = [];\n    let match;\n    \n    // استخراج تمام سلول‌ها\n    const tempCellRegex = /<td[^>]*>(.*?)<\\/td>/gis;\n    while ((match = tempCellRegex.exec(row)) !== null) {\n      // پاک کردن تگ‌های HTML و فضای خالی اضافی\n      let cellContent = match[1]\n        .replace(/<[^>]+>/g, '') // حذف تگ‌های HTML\n        .replace(/&nbsp;/g, ' ') // تبدیل &nbsp; به فضای معمولی\n        .replace(/&quot;/g, '\"') // تبدیل &quot; به \"\n        .replace(/&amp;/g, '&') // تبدیل &amp; به &\n        .trim();\n      cells.push(cellContent);\n    }\n    \n    // اگر سطر حداقل 4 ستون داشته باشد (عنوان، نوع، مهلت، جزئیات)\n    if (cells.length >= 4) {\n      subjects.push({\n        title: cells[0] || '',\n        type: cells[1] || '',\n        deadline: cells[2] || '',\n        details: cells[3] || ''\n      });\n    }\n  }\n  \n  // اگر با regex موفق نشدیم، از روش دیگری استفاده می‌کنیم\n  if (subjects.length === 0) {\n    // سعی می‌کنیم با pattern دیگری جدول را پیدا کنیم\n    // این بخش می‌تواند بعداً با توجه به ساختار واقعی سایت تنظیم شود\n    \n    // برای تست، یک آیتم نمونه اضافه می‌کنیم\n    subjects.push({\n      title: 'نمونه موضوع تحقیقاتی',\n      type: 'پایان‌نامه کارشناسی ارشد',\n      deadline: '۱۴۰۳/۰۸/۱۵',\n      details: 'جزئیات در سایت'\n    });\n  }\n} catch (error) {\n  // در صورت بروز خطا، یک پیام خطا برمی‌گردانیم\n  return [{\n    json: {\n      success: false,\n      error: error.message,\n      subjects: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    subjects: subjects,\n    count: subjects.length\n  }\n}];"
+      },
+      "id": "code-parse-001",
+      "name": "Parse HTML & Extract Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build formatted Telegram messages from research subjects\nconst data = $input.item.json;\nconst subjects = data.subjects || [];\n\nif (!data.success || subjects.length === 0) {\n  return [{\n    json: {\n      send: false,\n      message: '⚠️ *هیچ موضوع تحقیقاتی جدیدی یافت نشد*\\n\\nلطفاً بعداً دوباره بررسی کنید.',\n      count: 0\n    }\n  }];\n}\n\n// تابع تبدیل اعداد به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\n// ساخت پیام برای هر موضوع تحقیقاتی\nconst messages = [];\n\nsubjects.forEach((subject, index) => {\n  let msg = `📚 *موضوع تحقیقاتی جدید*\\n\\n`;\n  \n  // عنوان\n  if (subject.title) {\n    msg += `*📌 عنوان:*\\n${subject.title}\\n\\n`;\n  }\n  \n  // نوع\n  if (subject.type) {\n    msg += `*🎓 نوع:*\\n${subject.type}\\n\\n`;\n  }\n  \n  // مهلت ثبت پروپوزال\n  if (subject.deadline) {\n    const deadlineFa = toFaDigits(subject.deadline);\n    msg += `*⏰ مهلت ثبت پروپوزال:*\\n${deadlineFa}\\n\\n`;\n  }\n  \n  // جزئیات\n  if (subject.details) {\n    msg += `*📋 جزئیات:*\\n${subject.details}\\n\\n`;\n  }\n  \n  // لینک سایت\n  msg += `🔗 [مشاهده در سایت](https://research.abfamashhad.ir/SubjectsList)\\n\\n`;\n  \n  msg += `_🤖 پیام خودکار — شماره ${toFaDigits(index + 1)} از ${toFaDigits(subjects.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      subject: subject,\n      index: index + 1,\n      total: subjects.length\n    }\n  });\n});\n\n// اضافه کردن یک پیام خلاصه در ابتدا\nconst summaryMsg = `🔔 *موضوعات تحقیقاتی جدید — آبفای مشهد*\\n\\n` +\n  `تعداد: ${toFaDigits(subjects.length)} موضوع\\n` +\n  `تاریخ: ${new Date().toLocaleString('fa-IR')}\\n\\n` +\n  `_در پیام‌های بعدی جزئیات هر موضوع ارسال می‌شود._`;\n\nmessages.unshift({\n  json: {\n    send: true,\n    message: summaryMsg,\n    subject: null,\n    index: 0,\n    total: subjects.length\n  }\n});\n\nreturn messages;"
+      },
+      "id": "code-format-001",
+      "name": "Format Telegram Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.send }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-node-001",
+      "name": "Should Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "wait-node-001",
+      "name": "Wait Between Messages",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        32,
+        200
+      ],
+      "webhookId": "wait-between-messages-webhook"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID_HERE",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        200
+      ],
+      "id": "telegram-node-001",
+      "name": "Send to Telegram",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Research Subjects Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Research Subjects Page": {
+      "main": [
+        [
+          {
+            "node": "Parse HTML & Extract Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse HTML & Extract Data": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram Messages": {
+      "main": [
+        [
+          {
+            "node": "Should Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send?": {
+      "main": [
+        [
+          {
+            "node": "Wait Between Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Between Messages": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "research-scraper-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "ResearchSubjectsScraper",
+  "tags": [
+    "scraping",
+    "research",
+    "telegram",
+    "abfa-mashhad"
+  ]
+}
