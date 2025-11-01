@@ -69,7 +69,15 @@
               "value": "same-origin"
             },
             {
-              "name": "Port",
+              "name": "port",
+              "value": "443"
+            },
+            {
+              "name": "X-Port",
+              "value": "443"
+            },
+            {
+              "name": "X-Forwarded-Port",
               "value": "443"
             }
           ]
