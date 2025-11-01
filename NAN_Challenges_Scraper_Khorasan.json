@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "url": "https://nan.ac/challenges",
+        "url": "https://test.nan.ac/api/v1/Need/GetAllNeeds",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -33,52 +33,24 @@
             },
             {
               "name": "Accept",
-              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+              "value": "application/json"
             },
             {
               "name": "Accept-Language",
               "value": "fa-IR,fa;q=0.9,en-US,en;q=0.8"
-            },
-            {
-              "name": "Accept-Encoding",
-              "value": "gzip, deflate, br"
-            },
-            {
-              "name": "Connection",
-              "value": "keep-alive"
-            },
-            {
-              "name": "Upgrade-Insecure-Requests",
-              "value": "1"
-            },
-            {
-              "name": "Sec-Fetch-Dest",
-              "value": "document"
-            },
-            {
-              "name": "Sec-Fetch-Mode",
-              "value": "navigate"
-            },
-            {
-              "name": "Sec-Fetch-Site",
-              "value": "none"
-            },
-            {
-              "name": "Cache-Control",
-              "value": "max-age=0"
             }
           ]
         },
         "options": {
           "response": {
             "response": {
-              "responseFormat": "text"
+              "responseFormat": "json"
             }
           }
         }
       },
       "id": "http-request-nan",
-      "name": "Fetch NAN Challenges Page",
+      "name": "Fetch NAN Challenges (API)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -88,7 +60,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse HTML and extract challenges for Khorasan Razavi\nconst html = $input.item.json;\nconst htmlContent = typeof html === 'string' ? html : html.data || '';\n\n// تابع تبدیل اعداد به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\nconst challenges = [];\n\ntry {\n  // روش 1: اگر داده‌ها در JSON داخل صفحه باشند\n  const jsonMatch = htmlContent.match(/<script[^>]*>.*?var\\s+challenges\\s*=\\s*(\\[.*?\\]);/s);\n  if (jsonMatch) {\n    const challengesData = JSON.parse(jsonMatch[1]);\n    \n    // فیلتر کردن چالش‌های خراسان رضوی\n    challengesData.forEach(challenge => {\n      const province = challenge.province || challenge.استان || challenge.location || '';\n      if (province.includes('خراسان رضوی') || province.includes('Khorasan Razavi') || province.includes('مشهد')) {\n        challenges.push({\n          title: challenge.title || challenge.عنوان || '',\n          description: challenge.description || challenge.توضیحات || '',\n          province: province,\n          category: challenge.category || challenge.دسته || '',\n          deadline: challenge.deadline || challenge.مهلت || '',\n          link: challenge.link || challenge.لینک || '',\n          organization: challenge.organization || challenge.سازمان || ''\n        });\n      }\n    });\n  }\n  \n  // روش 2: اگر داده‌ها در HTML Cards باشند\n  if (challenges.length === 0) {\n    // استخراج card ها یا div های چالش‌ها\n    const cardRegex = /<div[^>]*class=\"[^\"]*challenge[^\"]*\"[^>]*>(.*?)<\\/div>/gis;\n    const cards = htmlContent.match(cardRegex) || [];\n    \n    cards.forEach(card => {\n      // بررسی اینکه آیا این کارت مربوط به خراسان رضوی هست\n      if (card.includes('خراسان رضوی') || card.includes('Khorasan Razavi') || card.includes('مشهد')) {\n        // استخراج عنوان\n        const titleMatch = card.match(/<h[1-6][^>]*>(.*?)<\\/h[1-6]>/i);\n        const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : '';\n        \n        // استخراج توضیحات\n        const descMatch = card.match(/<p[^>]*>(.*?)<\\/p>/i);\n        const description = descMatch ? descMatch[1].replace(/<[^>]+>/g, '').trim() : '';\n        \n        // استخراج لینک\n        const linkMatch = card.match(/href=\"([^\"]+)\"/i);\n        const link = linkMatch ? linkMatch[1] : '';\n        \n        if (title) {\n          challenges.push({\n            title: title,\n            description: description,\n            province: 'خراسان رضوی',\n            link: link.startsWith('http') ? link : `https://nan.ac${link}`,\n            category: '',\n            deadline: '',\n            organization: ''\n          });\n        }\n      }\n    });\n  }\n  \n  // روش 3: اگر ساختار دیگری داره (برای debug)\n  if (challenges.length === 0) {\n    // در این صورت، کل محتوای صفحه رو برای بررسی ذخیره می‌کنیم\n    // شما باید ساختار واقعی سایت رو بررسی کنید و regex ها رو تنظیم کنید\n    \n    // برای تست، یه نمونه اضافه می‌کنیم\n    challenges.push({\n      title: 'لطفاً ساختار سایت را بررسی کنید',\n      description: 'باید کد پارس HTML را با ساختار واقعی سایت تنظیم کنید',\n      province: 'خراسان رضوی',\n      link: 'https://nan.ac/challenges',\n      category: 'تست',\n      deadline: '',\n      organization: 'NAN',\n      rawHtmlLength: htmlContent.length\n    });\n  }\n  \n} catch (error) {\n  return [{\n    json: {\n      success: false,\n      error: error.message,\n      challenges: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    challenges: challenges,\n    count: challenges.length,\n    province: 'خراسان رضوی'\n  }\n}];"
+        "jsCode": "// پردازش داده‌های API و فیلتر کردن چالش‌های خراسان رضوی\nconst data = $input.item.json;\n\n// تابع تبدیل اعداد به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\nconst challenges = [];\n\ntry {\n  // شناسه خراسان رضوی (باید بعداً از API GetProvinces بدست بیاید)\n  // فعلاً از نام استفاده می‌کنیم\n  const KHORASAN_RAZAVI_ID = 30; // این مقدار رو باید بعداً تنظیم کنید\n  \n  // داده‌ها می‌تونن در فرمت‌های مختلف باشن\n  const allNeeds = data.data || data.needs || data.challenges || data;\n  \n  // اگر data یه آرایه نیست، شاید توی یه کلید باشه\n  const needsArray = Array.isArray(allNeeds) ? allNeeds : [];\n  \n  if (needsArray.length === 0) {\n    // برای debug، ببینیم چه کلیدهایی داریم\n    console.log('Keys in data:', Object.keys(data));\n  }\n  \n  // فیلتر کردن چالش‌های خراسان رضوی\n  needsArray.forEach(need => {\n    // بررسی فیلدهای مختلف برای استان\n    const provinceId = need.provinceId || need.province_id || need.provinceID;\n    const provinceName = need.province || need.provinceName || need.استان || '';\n    const provinceIds = need.provinceIds || need.province_ids || [];\n    \n    // چک کردن آیا این چالش برای خراسان رضوی هست\n    let isKhorasanRazavi = false;\n    \n    // روش 1: مقایسه با ID\n    if (provinceId === KHORASAN_RAZAVI_ID) {\n      isKhorasanRazavi = true;\n    }\n    \n    // روش 2: چک کردن آرایه IDs\n    if (Array.isArray(provinceIds) && provinceIds.includes(KHORASAN_RAZAVI_ID)) {\n      isKhorasanRazavi = true;\n    }\n    \n    // روش 3: چک کردن نام استان\n    if (provinceName.includes('خراسان رضوی') || provinceName.includes('مشهد')) {\n      isKhorasanRazavi = true;\n    }\n    \n    // روش 4: اگر provinceIds خالی باشه یا null، ممکنه برای همه استان‌ها باشه\n    // در این صورت می‌تونید تصمیم بگیرید آیا اضافه کنید یا نه\n    \n    if (isKhorasanRazavi) {\n      // استخراج اطلاعات از ساختار JSON\n      // بر اساس snippet شما، ساختار شامل موارد زیر است:\n      \n      const title = need.text || need.title || need.عنوان || '';\n      const dor = need.dor || '';\n      \n      // استخراج مهلت از item3 (بر اساس snippet شما)\n      const deadline = need.item3?.text || need.deadline || need.مهلت || '';\n      \n      // استخراج تعداد ایده از item2\n      const ideasCount = need.item2?.text || '';\n      \n      // استخراج پاداش از item1\n      const reward = need.item1?.text || '';\n      \n      // استخراج لینک (اگر وجود داشته باشد)\n      const link = need.link || need.url || `https://nan.ac/challenges/${need.id || ''}`;\n      \n      challenges.push({\n        id: need.id || '',\n        title: title,\n        description: need.description || need.توضیحات || '',\n        province: 'خراسان رضوی',\n        provinceId: provinceId,\n        deadline: deadline,\n        reward: reward,\n        ideasCount: ideasCount,\n        dor: dor,\n        ribbon: need.ribbon || '',\n        stamp: need.stamp || '',\n        link: link,\n        category: need.category || need.دسته || '',\n        organization: need.organization || need.سازمان || 'NAN'\n      });\n    }\n  });\n  \n  // اگر هیچ چالشی پیدا نشد، برای debug کل ساختار رو برمی‌گردونیم\n  if (challenges.length === 0) {\n    console.log('No challenges found for Khorasan Razavi');\n    console.log('Sample item:', needsArray[0]);\n    console.log('Total items:', needsArray.length);\n  }\n  \n} catch (error) {\n  return [{\n    json: {\n      success: false,\n      error: error.message,\n      errorStack: error.stack,\n      challenges: [],\n      rawData: data // برای debug\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    challenges: challenges,\n    count: challenges.length,\n    province: 'خراسان رضوی',\n    khorasanRazaviId: KHORASAN_RAZAVI_ID\n  }\n}];"
       },
       "id": "code-parse-nan",
       "name": "Parse & Filter Khorasan Challenges",
