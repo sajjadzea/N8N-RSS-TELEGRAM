@@ -1,0 +1,244 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "command": "=/usr/bin/wget --post-data='{}' --header='Accept: application/json, text/plain, */*' --header='Content-Type: application/json' --header='Origin: https://test.nan.ac' --header='Referer: https://test.nan.ac/' --header='User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' --header='Port: 512' -O- -q 'https://test.nan.ac/api/v1/Need/GetAllNeeds'"
+      },
+      "id": "4cce2cda-33dd-4549-8a6a-ad3494bf4c2e",
+      "name": "Fetch NAN Challenges (cURL)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// تبدیل خروجی cURL به JSON\nconst items = $input.all();\nconst allResults = [];\n\nitems.forEach(item => {\n  const stdout = item.json.stdout || item.json.data || '';\n  \n  try {\n    const jsonData = JSON.parse(stdout);\n    \n    // بررسی اینکه آرایه هست یا object\n    if (Array.isArray(jsonData)) {\n      // اگر آرایه هست، هر آیتم رو جداگانه برگردون\n      jsonData.forEach(need => {\n        allResults.push({ json: need });\n      });\n    } else {\n      // اگر object هست، مستقیم برگردون\n      allResults.push({ json: jsonData });\n    }\n  } catch (error) {\n    allResults.push({\n      json: {\n        error: 'Failed to parse JSON',\n        rawOutput: stdout.substring(0, 1000),\n        errorMessage: error.message\n      }\n    });\n  }\n});\n\nreturn allResults;"
+      },
+      "id": "0cb542cc-5377-41ca-aae0-da35e2c4db2d",
+      "name": "Parse cURL Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "id": "2d352f18-8823-4896-ae6a-4fa950797f34",
+      "name": "Every 12 Hours2",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        192,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// پردازش داده‌های API و فیلتر کردن چالش‌های خراسان رضوی\nconst items = $input.all();  // همه items رو بگیر\n\n// تابع تبدیل اعداد به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\nconst challenges = [];\nlet totalProcessed = 0;\n\ntry {\n  // پردازش تمام items\n  items.forEach(item => {\n    const need = item.json;\n    totalProcessed++;\n    \n    // استخراج تمام فیلدهایی که ممکنه استان داخلش باشه\n    const mainLogoName = need.mainLogoName || '';\n    const title = need.title || '';\n    const secondaryLogoName = need.secondaryLogoName || '';\n    const dor = need.dor || '';\n    \n    // جستجو برای خراسان رضوی - با تمام حالات ممکن\n    const searchText = `${mainLogoName} ${title} ${secondaryLogoName} ${dor}`.toLowerCase();\n    \n    const isKhorasanRazavi = \n      searchText.includes('خراسان رضوی') ||\n      searchText.includes('خراسان‌رضوی') ||\n      searchText.includes('خراسانرضوی') ||\n      searchText.includes('خراسان') ||\n      searchText.includes('مشهد') ||\n      searchText.includes('khorasan razavi') ||\n      searchText.includes('khorasan') ||\n      mainLogoName.includes('خراسان') ||\n      title.includes('خراسان');\n    \n    if (isKhorasanRazavi) {\n      const id = need.id || '';\n      const titleText = need.title || '';\n      \n      // استخراج پاداش از item1\n      const reward = need.item1?.text || '';\n      const rewardTooltip = need.item1?.tooltip || '';\n      \n      // استخراج تعداد ایده از item2\n      const ideasCount = need.item2?.text || '0';\n      \n      // استخراج مهلت از item3\n      const deadline = need.item3?.text || dor || '';\n      \n      // استخراج تعداد بازدید از item4\n      const viewCount = need.item4?.text || '0';\n      \n      // سازمان\n      const organization = mainLogoName || 'NAN';\n      \n      // لینک\n      const link = `https://nan.ac/challenges/${id}`;\n      \n      challenges.push({\n        id: id,\n        title: titleText,\n        province: 'خراسان رضوی',\n        organization: organization,\n        deadline: deadline,\n        reward: reward,\n        rewardType: rewardTooltip,\n        ideasCount: ideasCount,\n        viewCount: viewCount,\n        dor: dor,\n        ribbon: need.ribbon || null,\n        stamp: need.stamp || null,\n        link: link,\n        mainLogoName: mainLogoName,\n        secondaryLogoName: secondaryLogoName || null\n      });\n    }\n  });\n  \n} catch (error) {\n  return [{\n    json: {\n      success: false,\n      error: error.message,\n      errorStack: error.stack,\n      challenges: [],\n      totalProcessed: totalProcessed\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    challenges: challenges,\n    count: challenges.length,\n    totalProcessed: totalProcessed,\n    province: 'خراسان رضوی',\n    note: `پردازش شد: ${totalProcessed} نیاز - پیدا شد: ${challenges.length} مورد خراسان رضوی`\n  }\n}];"
+      },
+      "id": "b15d7c14-c5cc-4d26-9d39-38f0c31167bb",
+      "name": "Parse & Filter Khorasan Challenges2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// مقایسه با داده‌های قبلی و تشخیص تغییرات\nconst data = $input.item.json;\nconst currentChallenges = data.challenges || [];\n\nconst workflowStaticData = $getWorkflowStaticData('global');\nconst previousChallenges = workflowStaticData.nanChallenges || {};\n\nconst newChallenges = [];\nconst updatedChallenges = [];\nconst unchangedChallenges = [];\n\nconst currentChallengesMap = {};\ncurrentChallenges.forEach(challenge => {\n  const key = challenge.title.trim();\n  currentChallengesMap[key] = challenge;\n});\n\ncurrentChallenges.forEach(challenge => {\n  const key = challenge.title.trim();\n  const prevChallenge = previousChallenges[key];\n  \n  if (!prevChallenge) {\n    newChallenges.push({\n      ...challenge,\n      changeType: 'new'\n    });\n  } else {\n    const changes = [];\n    \n    if (prevChallenge.deadline !== challenge.deadline) {\n      changes.push({\n        field: 'مهلت',\n        oldValue: prevChallenge.deadline,\n        newValue: challenge.deadline\n      });\n    }\n    \n    if (prevChallenge.description !== challenge.description) {\n      changes.push({\n        field: 'توضیحات',\n        oldValue: prevChallenge.description,\n        newValue: challenge.description\n      });\n    }\n    \n    if (changes.length > 0) {\n      updatedChallenges.push({\n        ...challenge,\n        changeType: 'updated',\n        changes: changes\n      });\n    } else {\n      unchangedChallenges.push({\n        ...challenge,\n        changeType: 'unchanged'\n      });\n    }\n  }\n});\n\nworkflowStaticData.nanChallenges = currentChallengesMap;\nworkflowStaticData.lastCheckTime = new Date().toISOString();\n\nreturn [{\n  json: {\n    success: true,\n    newCount: newChallenges.length,\n    updatedCount: updatedChallenges.length,\n    unchangedCount: unchangedChallenges.length,\n    totalCount: currentChallenges.length,\n    newChallenges: newChallenges,\n    updatedChallenges: updatedChallenges,\n    unchangedChallenges: unchangedChallenges,\n    hasChanges: (newChallenges.length > 0 || updatedChallenges.length > 0)\n  }\n}];"
+      },
+      "id": "c4438539-3ff3-4dbe-9af1-47c37117a6b5",
+      "name": "Detect Changes3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ساخت پیام‌های Telegram\nconst data = $input.item.json;\nconst newChallenges = data.newChallenges || [];\nconst updatedChallenges = data.updatedChallenges || [];\n\nif (!data.hasChanges) {\n  return [{\n    json: {\n      send: false,\n      message: '✅ *بررسی انجام شد*\\n\\nهیچ چالش جدید یا به‌روزرسانی در خراسان رضوی یافت نشد.',\n      messageType: 'no_changes'\n    }\n  }];\n}\n\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\nconst messages = [];\n\n// پیام خلاصه\nlet summaryMsg = `🔔 *چالش‌های نوآوری — خراسان رضوی*\\n\\n`;\nif (newChallenges.length > 0) {\n  summaryMsg += `🆕 چالش‌های جدید: ${toFaDigits(newChallenges.length)}\\n`;\n}\nif (updatedChallenges.length > 0) {\n  summaryMsg += `🔄 چالش‌های به‌روزرسانی شده: ${toFaDigits(updatedChallenges.length)}\\n`;\n}\nsummaryMsg += `\\n📅 زمان بررسی: ${new Date().toLocaleString('fa-IR')}\\n\\n`;\nsummaryMsg += `_در پیام‌های بعدی جزئیات ارسال می‌شود._`;\n\nmessages.push({\n  json: {\n    send: true,\n    message: summaryMsg,\n    messageType: 'summary',\n    index: 0\n  }\n});\n\n// پیام برای چالش‌های جدید\nnewChallenges.forEach((challenge, index) => {\n  let msg = `🆕 *چالش نوآوری جدید*\\n\\n`;\n  \n  if (challenge.title) {\n    msg += `*📌 عنوان:*\\n${challenge.title}\\n\\n`;\n  }\n  \n  if (challenge.organization) {\n    msg += `*🏢 سازمان:*\\n${challenge.organization}\\n\\n`;\n  }\n  \n  if (challenge.reward) {\n    msg += `*💰 ${challenge.rewardType || 'پاداش'}:*\\n${challenge.reward}\\n\\n`;\n  }\n  \n  if (challenge.deadline) {\n    msg += `*⏰ مهلت:*\\n${challenge.deadline}\\n\\n`;\n  }\n  \n  if (challenge.ideasCount) {\n    msg += `*💡 تعداد ایده:* ${toFaDigits(challenge.ideasCount)}\\n`;\n  }\n  \n  if (challenge.viewCount) {\n    msg += `*👁 تعداد بازدید:* ${toFaDigits(challenge.viewCount)}\\n`;\n  }\n  \n  msg += `*📍 استان:* خراسان رضوی\\n\\n`;\n  \n  if (challenge.link) {\n    msg += `🔗 [مشاهده جزئیات و ثبت ایده](${challenge.link})\\n\\n`;\n  }\n  \n  msg += `_🤖 چالش جدید شماره ${toFaDigits(index + 1)} از ${toFaDigits(newChallenges.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      messageType: 'new',\n      challenge: challenge,\n      index: messages.length\n    }\n  });\n});\n\n// پیام برای چالش‌های به‌روزرسانی شده\nupdatedChallenges.forEach((challenge, index) => {\n  let msg = `🔄 *به‌روزرسانی چالش نوآوری*\\n\\n`;\n  \n  if (challenge.title) {\n    msg += `*📌 عنوان:*\\n${challenge.title}\\n\\n`;\n  }\n  \n  msg += `*✏️ تغییرات:*\\n`;\n  \n  challenge.changes.forEach(change => {\n    msg += `\\n▫️ *${change.field}*\\n`;\n    if (change.field === 'مهلت') {\n      msg += `   قبلی: ${toFaDigits(change.oldValue)}\\n`;\n      msg += `   جدید: ${toFaDigits(change.newValue)} ✨\\n`;\n    } else {\n      msg += `   قبلی: ${change.oldValue}\\n`;\n      msg += `   جدید: ${change.newValue} ✨\\n`;\n    }\n  });\n  \n  msg += `\\n*📊 اطلاعات فعلی:*\\n\\n`;\n  \n  if (challenge.organization) {\n    msg += `*🏢 سازمان:* ${challenge.organization}\\n`;\n  }\n  \n  if (challenge.deadline) {\n    msg += `*⏰ مهلت:* ${toFaDigits(challenge.deadline)}\\n`;\n  }\n  \n  if (challenge.link) {\n    msg += `\\n🔗 [مشاهده جزئیات](${challenge.link})\\n\\n`;\n  }\n  \n  msg += `_🤖 به‌روزرسانی شماره ${toFaDigits(index + 1)} از ${toFaDigits(updatedChallenges.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      messageType: 'updated',\n      challenge: challenge,\n      index: messages.length\n    }\n  });\n});\n\nreturn messages;"
+      },
+      "id": "c4890ed7-01ed-4e35-92c1-1cd7bb50f4d9",
+      "name": "Format Telegram Messages3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.send }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b177af73-fe7b-4e96-8d68-ad7c2036b053",
+      "name": "Should Send?3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "42a7668f-d239-4a8b-b225-a478b5cef259",
+      "name": "Wait Between Messages3",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1552,
+        -64
+      ],
+      "webhookId": "wait-nan-messages"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID_HERE",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        -64
+      ],
+      "id": "941451ca-9dcb-4920-bee2-a1e9aea0607d",
+      "name": "Send to Telegram3",
+      "webhookId": "ed101e8b-c783-4a37-a9f9-c9e9be3f4022"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch NAN Challenges (cURL)": {
+      "main": [
+        [
+          {
+            "node": "Parse cURL Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse cURL Response": {
+      "main": [
+        [
+          {
+            "node": "Parse & Filter Khorasan Challenges2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 12 Hours2": {
+      "main": [
+        [
+          {
+            "node": "Fetch NAN Challenges (cURL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Filter Khorasan Challenges2": {
+      "main": [
+        [
+          {
+            "node": "Detect Changes3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Changes3": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram Messages3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram Messages3": {
+      "main": [
+        [
+          {
+            "node": "Should Send?3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send?3": {
+      "main": [
+        [
+          {
+            "node": "Wait Between Messages3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Between Messages3": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0e381f34-afbd-4e2e-841e-88bc228ad01e",
+  "meta": {
+    "instanceId": "e0014d49ee7df39f8b8cac083fd591756af7807647929906bd8e545ef487fc2b"
+  },
+  "id": "eRqE9o8jpdwX9oc8",
+  "tags": []
+}
