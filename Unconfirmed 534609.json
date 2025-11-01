@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "command": "=/usr/bin/wget --post-data='{\"pageSize\":1000,\"pageNumber\":1}' --header='Accept: application/json, text/plain, */*' --header='Content-Type: application/json' --header='Origin: https://test.nan.ac' --header='Referer: https://test.nan.ac/' --header='User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' --header='Port: 512' -O- -q 'https://test.nan.ac/api/v1/Need/GetAllNeeds'"
+        "command": "=/usr/bin/wget --post-data='{\"isActive\":\"active\",\"isMasterOrient\":false,\"moSemester\":\"\",\"isUniversity\":false,\"EducationLevel\":\"all\",\"AdmissionType\":\"all\",\"Capacity\":\"all\",\"ideaType\":\"all\",\"level1\":[],\"level2\":[],\"level3\":[],\"ministry\":[],\"organization\":[],\"awards\":[],\"ideaTemplate\":[],\"province\":[{\"id\":11,\"name\":\"خراسان رضوی\"}],\"city\":[],\"trl\":[1,9],\"mode\":\"challenges\",\"searchedText\":\"\",\"sort\":\"regDate\",\"order\":\"desc\",\"page\":1,\"pageSize\":1000}' --header='Accept: application/json, text/plain, */*' --header='Accept-Language: en,fa;q=0.9,en-US;q=0.8' --header='Cache-Control: no-cache' --header='Content-Type: application/json' --header='Origin: https://nan.ac' --header='Port: 1' --header='Referer: https://nan.ac/' --header='User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' -O- -q 'https://test.nan.ac/api/v1/Need/GetAllNeeds'"
       },
       "id": "4cce2cda-33dd-4549-8a6a-ad3494bf4c2e",
       "name": "Fetch NAN Challenges (cURL)",
