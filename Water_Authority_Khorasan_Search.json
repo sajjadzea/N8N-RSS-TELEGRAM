@@ -37,12 +37,12 @@
               "value": "آب منطقه‌ای خراسان رضوی"
             },
             {
-              "name": "country",
-              "value": "us"
+              "name": "results",
+              "value": "50"
             },
             {
-              "name": "language",
-              "value": "en"
+              "name": "page",
+              "value": "0"
             }
           ]
         },
@@ -55,7 +55,7 @@
             },
             {
               "name": "Accept",
-              "value": "application/json, text/html, */*"
+              "value": "application/json"
             },
             {
               "name": "Accept-Language",
@@ -64,7 +64,15 @@
           ]
         },
         "options": {
-          "timeout": 30000
+          "timeout": 60000,
+          "retry": {
+            "maxRetries": 3,
+            "retryOnHttpStatusCodes": [
+              {
+                "values": "429,500,502,503,504"
+              }
+            ]
+          }
         }
       },
       "id": "http-search-water-authority",
@@ -73,6 +81,19 @@
       "typeVersion": 4.2,
       "position": [
         -1080,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// بررسی وضعیت پاسخ API و لاگ کردن اطلاعات\nconst response = $input.item;\nconst data = response.json;\n\nconsole.log('API Response Status:', response.statusCode || 'N/A');\nconsole.log('Response Type:', typeof data);\n\n// بررسی خطا\nif (response.statusCode && response.statusCode !== 200) {\n  throw new Error(`API returned status ${response.statusCode}: ${JSON.stringify(data)}`);\n}\n\n// بررسی ساختار داده\nif (data.error) {\n  throw new Error(`API Error: ${data.error}`);\n}\n\nconsole.log('API call successful');\n\nreturn [$input.item];"
+      },
+      "id": "code-check-api-response",
+      "name": "Check API Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -940,
         400
       ]
     },
@@ -190,6 +211,17 @@
       ]
     },
     "Search Water Authority News": {
+      "main": [
+        [
+          {
+            "node": "Check API Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check API Response": {
       "main": [
         [
           {
