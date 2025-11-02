@@ -1,0 +1,397 @@
+{
+  "name": "Research Priorities - Tavanir Khorasan",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-tavanir",
+      "name": "Every 12 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1300,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://satab.tavanir.org.ir/Account/TBL_Place_Login_Page_APIDdl",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7"
+            },
+            {
+              "name": "Referer",
+              "value": "https://satab.tavanir.org.ir/"
+            },
+            {
+              "name": "Origin",
+              "value": "https://satab.tavanir.org.ir"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-get-companies",
+      "name": "Fetch Companies List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1080,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// فیلتر کردن سه شرکت خراسانی\nconst data = $input.item.json;\n\n// بررسی اینکه data آرایه است یا نه\nconst companies = Array.isArray(data) ? data : (data.data || []);\n\nif (companies.length === 0) {\n  console.log('No companies received from API');\n  return [{\n    json: {\n      error: 'No companies data',\n      companies: []\n    }\n  }];\n}\n\n// نام‌های شرکت‌های مورد نظر\nconst targetCompanies = [\n  'توزیع برق مشهد',\n  'توزیع نیروی برق مشهد',\n  'شرکت توزیع برق مشهد',\n  'شرکت توزیع نیروی برق مشهد',\n  'توزیع برق خراسان رضوی',\n  'توزیع نیروی برق خراسان رضوی',\n  'شرکت توزیع برق خراسان رضوی',\n  'شرکت توزیع نیروی برق خراسان رضوی',\n  'برق منطقه ای خراسان',\n  'برق منطقه‌ای خراسان',\n  'شرکت برق منطقه ای خراسان',\n  'شرکت برق منطقه‌ای خراسان'\n];\n\n// فیلتر کردن شرکت‌های خراسانی\nconst khorasanCompanies = companies.filter(company => {\n  const companyName = (company.TextMember || '').trim();\n  \n  // بررسی با نام‌های دقیق\n  for (const target of targetCompanies) {\n    if (companyName === target) {\n      return true;\n    }\n  }\n  \n  // بررسی اینکه آیا نام شامل کلمات کلیدی است\n  const lowerName = companyName.toLowerCase();\n  const isMashhad = lowerName.includes('مشهد');\n  const isKhorasan = lowerName.includes('خراسان');\n  const isDistribution = lowerName.includes('توزیع');\n  const isRegional = lowerName.includes('منطقه');\n  \n  return (isMashhad || isKhorasan) && (isDistribution || isRegional);\n});\n\nconsole.log(`Total companies: ${companies.length}`);\nconsole.log(`Khorasan companies found: ${khorasanCompanies.length}`);\n\n// ساخت آرایه خروجی - هر شرکت یک آیتم جداگانه\nconst output = khorasanCompanies.map(company => ({\n  json: {\n    companyId: company.ValueMember,\n    companyName: company.TextMember\n  }\n}));\n\nif (output.length === 0) {\n  // اگر هیچ شرکتی پیدا نشد، یک آیتم خطا برمی‌گردانیم\n  return [{\n    json: {\n      error: 'No Khorasan companies found',\n      allCompanies: companies.map(c => c.TextMember),\n      companyId: null,\n      companyName: null\n    }\n  }];\n}\n\nreturn output;"
+      },
+      "id": "code-filter-companies",
+      "name": "Filter Khorasan Companies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -860,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://satab.tavanir.org.ir/Account/FillBDG_BUD_Project_Priority",
+        "authentication": "none",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded; charset=UTF-8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7"
+            },
+            {
+              "name": "Referer",
+              "value": "https://satab.tavanir.org.ir/"
+            },
+            {
+              "name": "Origin",
+              "value": "https://satab.tavanir.org.ir"
+            },
+            {
+              "name": "X-Requested-With",
+              "value": "XMLHttpRequest"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "string",
+        "body": "=sort=&page=1&pageSize=100&group=&filter=&TBL_PlaceID_fk={{ $json.companyId }}",
+        "options": {}
+      },
+      "id": "http-get-projects",
+      "name": "Fetch Projects for Company",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -640,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ترکیب response API با اطلاعات شرکت\nconst apiResponse = $input.item.json;\nconst allItems = $input.all();\n\n// دریافت companyName و companyId از item اول (که از node قبلی آمده)\nconst firstItem = allItems[0];\nconst previousData = firstItem.json;\n\nreturn [{\n  json: {\n    apiResponse: apiResponse,\n    companyId: previousData.companyId || null,\n    companyName: previousData.companyName || 'نامشخص'\n  }\n}];"
+      },
+      "id": "code-merge-company-info",
+      "name": "Merge Company Info with Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// استخراج و پردازش داده‌های پروژه‌ها\nconst data = $input.item.json;\nconst response = data.apiResponse || data;\nconst companyName = data.companyName || 'نامشخص';\n\n// تابع تبدیل اعداد به فارسی\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\n// تابع تبدیل تاریخ میلادی به شمسی (ساده)\nfunction formatDate(dateStr) {\n  if (!dateStr) return '';\n  \n  // اگر تاریخ به فرمت ISO یا میلادی است، همان را نمایش می‌دهیم\n  // در صورت نیاز می‌توان تبدیل دقیق‌تری انجام داد\n  try {\n    const date = new Date(dateStr);\n    if (isNaN(date.getTime())) {\n      return toFaDigits(dateStr);\n    }\n    return toFaDigits(dateStr);\n  } catch (e) {\n    return toFaDigits(dateStr);\n  }\n}\n\ntry {\n  // بررسی ساختار پاسخ\n  let projectsData = [];\n  \n  if (response.Data && Array.isArray(response.Data)) {\n    projectsData = response.Data;\n  } else if (Array.isArray(response)) {\n    projectsData = response;\n  } else {\n    console.log('Unexpected response structure');\n    return [{\n      json: {\n        error: 'Invalid response structure',\n        response: response,\n        projects: []\n      }\n    }];\n  }\n  \n  console.log(`Projects found: ${projectsData.length}`);\n  \n  // پردازش هر پروژه\n  const projects = projectsData.map(project => {\n    return {\n      title: project.BUD_ProjectBudgetTitle || '',\n      company: project.TBL_PlaceName || companyName,\n      mainAxis: project.PMS_PcName || '',\n      subAxis: project.PMS_PnName || '',\n      status: project.PMS_PsName || '',\n      finalProduct: project.BUD_PriorityFinalProduct || '',\n      publishDate: formatDate(project.BUD_ProjectTempDeliveryDate),\n      deadline: formatDate(project.BUD_PeiUsageRequiredDate),\n      // فیلدهای اضافی که ممکن است مفید باشند\n      projectId: project.BUD_ProjectID || project.Id || '',\n      budget: project.BUD_ProjectBudget || '',\n      duration: project.BUD_ProjectDuration || ''\n    };\n  });\n  \n  return [{\n    json: {\n      success: true,\n      company: companyName,\n      projects: projects,\n      count: projects.length,\n      total: response.Total || projects.length\n    }\n  }];\n  \n} catch (error) {\n  return [{\n    json: {\n      success: false,\n      error: error.message,\n      errorStack: error.stack,\n      projects: [],\n      rawResponse: response\n    }\n  }];\n}"
+      },
+      "id": "code-parse-projects",
+      "name": "Parse Projects Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ترکیب پروژه‌های تمام شرکت‌ها\nconst items = $input.all();\n\nconst allProjects = [];\nconst companiesSummary = [];\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  if (data.success && data.projects) {\n    // اضافه کردن پروژه‌ها\n    data.projects.forEach(project => {\n      allProjects.push(project);\n    });\n    \n    // خلاصه هر شرکت\n    companiesSummary.push({\n      company: data.company,\n      count: data.count,\n      total: data.total\n    });\n  }\n});\n\nconsole.log(`Total projects from all companies: ${allProjects.length}`);\n\nreturn [{\n  json: {\n    success: true,\n    allProjects: allProjects,\n    totalCount: allProjects.length,\n    companies: companiesSummary,\n    companiesCount: companiesSummary.length\n  }\n}];"
+      },
+      "id": "code-merge-projects",
+      "name": "Merge All Projects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// تشخیص تغییرات نسبت به اجرای قبلی\nconst data = $input.item.json;\nconst currentProjects = data.allProjects || [];\n\nconst workflowStaticData = $getWorkflowStaticData('global');\nconst previousProjects = workflowStaticData.tavanirProjects || {};\n\nconst newProjects = [];\nconst updatedProjects = [];\nconst unchangedProjects = [];\n\n// ساخت Map از پروژه‌های فعلی\nconst currentProjectsMap = {};\ncurrentProjects.forEach(project => {\n  // کلید یونیک: ترکیب عنوان و شرکت\n  const key = `${project.title.trim()}||${project.company.trim()}`;\n  currentProjectsMap[key] = project;\n});\n\n// بررسی هر پروژه\ncurrentProjects.forEach(project => {\n  const key = `${project.title.trim()}||${project.company.trim()}`;\n  const prevProject = previousProjects[key];\n  \n  if (!prevProject) {\n    // پروژه جدید است\n    newProjects.push({\n      ...project,\n      changeType: 'new'\n    });\n  } else {\n    // بررسی تغییرات\n    const changes = [];\n    \n    if (prevProject.status !== project.status) {\n      changes.push({\n        field: 'وضعیت',\n        oldValue: prevProject.status,\n        newValue: project.status\n      });\n    }\n    \n    if (prevProject.deadline !== project.deadline) {\n      changes.push({\n        field: 'مهلت پذیرش',\n        oldValue: prevProject.deadline,\n        newValue: project.deadline\n      });\n    }\n    \n    if (prevProject.publishDate !== project.publishDate) {\n      changes.push({\n        field: 'تاریخ انتشار',\n        oldValue: prevProject.publishDate,\n        newValue: project.publishDate\n      });\n    }\n    \n    if (prevProject.finalProduct !== project.finalProduct) {\n      changes.push({\n        field: 'محصول نهایی',\n        oldValue: prevProject.finalProduct,\n        newValue: project.finalProduct\n      });\n    }\n    \n    if (changes.length > 0) {\n      updatedProjects.push({\n        ...project,\n        changeType: 'updated',\n        changes: changes\n      });\n    } else {\n      unchangedProjects.push({\n        ...project,\n        changeType: 'unchanged'\n      });\n    }\n  }\n});\n\n// به‌روزرسانی داده‌های ذخیره شده\nworkflowStaticData.tavanirProjects = currentProjectsMap;\nworkflowStaticData.lastCheckTime = new Date().toISOString();\n\nreturn [{\n  json: {\n    success: true,\n    newCount: newProjects.length,\n    updatedCount: updatedProjects.length,\n    unchangedCount: unchangedProjects.length,\n    totalCount: currentProjects.length,\n    newProjects: newProjects,\n    updatedProjects: updatedProjects,\n    unchangedProjects: unchangedProjects,\n    hasChanges: (newProjects.length > 0 || updatedProjects.length > 0),\n    companies: data.companies\n  }\n}];"
+      },
+      "id": "code-detect-changes",
+      "name": "Detect Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ساخت پیام‌های تلگرام برای پروژه‌های جدید و به‌روزرسانی شده\nconst data = $input.item.json;\nconst newProjects = data.newProjects || [];\nconst updatedProjects = data.updatedProjects || [];\nconst companies = data.companies || [];\n\nif (!data.hasChanges) {\n  return [{\n    json: {\n      send: false,\n      message: '✅ *بررسی انجام شد*\\n\\nهیچ اولویت تحقیقاتی جدید یا به‌روزرسانی در شرکت‌های خراسانی یافت نشد.',\n      messageType: 'no_changes'\n    }\n  }];\n}\n\nconst faNums = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];\nfunction toFaDigits(s) {\n  if (s === null || s === undefined) return '';\n  return String(s).replace(/\\d/g, d => faNums[Number(d)]);\n}\n\nconst messages = [];\n\n// پیام خلاصه\nlet summaryMsg = `🔔 *به‌روزرسانی اولویت‌های تحقیقاتی — صنعت برق خراسان*\\n\\n`;\n\nif (companies.length > 0) {\n  summaryMsg += `*📊 شرکت‌های بررسی شده:*\\n`;\n  companies.forEach(comp => {\n    summaryMsg += `▫️ ${comp.company}: ${toFaDigits(comp.count)} پروژه\\n`;\n  });\n  summaryMsg += `\\n`;\n}\n\nif (newProjects.length > 0) {\n  summaryMsg += `🆕 *اولویت‌های جدید:* ${toFaDigits(newProjects.length)}\\n`;\n}\nif (updatedProjects.length > 0) {\n  summaryMsg += `🔄 *به‌روزرسانی‌ها:* ${toFaDigits(updatedProjects.length)}\\n`;\n}\n\nsummaryMsg += `\\n📅 *زمان بررسی:* ${new Date().toLocaleString('fa-IR')}\\n\\n`;\nsummaryMsg += `_جزئیات در پیام‌های بعدی ارسال می‌شود._`;\n\nmessages.push({\n  json: {\n    send: true,\n    message: summaryMsg,\n    messageType: 'summary',\n    index: 0\n  }\n});\n\n// پیام برای پروژه‌های جدید\nnewProjects.forEach((project, index) => {\n  let msg = `🆕 *اولویت تحقیقاتی جدید*\\n\\n`;\n  \n  if (project.title) {\n    msg += `*📌 عنوان:*\\n${project.title}\\n\\n`;\n  }\n  \n  if (project.company) {\n    msg += `*🏢 شرکت:*\\n${project.company}\\n\\n`;\n  }\n  \n  if (project.mainAxis) {\n    msg += `*🎯 محور اصلی:*\\n${project.mainAxis}\\n\\n`;\n  }\n  \n  if (project.subAxis) {\n    msg += `*📍 زیر محور:*\\n${project.subAxis}\\n\\n`;\n  }\n  \n  if (project.finalProduct) {\n    msg += `*🎁 محصول نهایی:*\\n${project.finalProduct}\\n\\n`;\n  }\n  \n  if (project.status) {\n    msg += `*📊 وضعیت:*\\n${project.status}\\n\\n`;\n  }\n  \n  if (project.publishDate) {\n    msg += `*📅 تاریخ انتشار:* ${project.publishDate}\\n`;\n  }\n  \n  if (project.deadline) {\n    msg += `*⏰ مهلت پذیرش:* ${project.deadline}\\n`;\n  }\n  \n  msg += `\\n🔗 [مشاهده در سایت توانیر](https://satab.tavanir.org.ir/)\\n\\n`;\n  msg += `_🤖 پروژه جدید شماره ${toFaDigits(index + 1)} از ${toFaDigits(newProjects.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      messageType: 'new',\n      project: project,\n      index: messages.length\n    }\n  });\n});\n\n// پیام برای پروژه‌های به‌روزرسانی شده\nupdatedProjects.forEach((project, index) => {\n  let msg = `🔄 *به‌روزرسانی اولویت تحقیقاتی*\\n\\n`;\n  \n  if (project.title) {\n    msg += `*📌 عنوان:*\\n${project.title}\\n\\n`;\n  }\n  \n  if (project.company) {\n    msg += `*🏢 شرکت:* ${project.company}\\n\\n`;\n  }\n  \n  msg += `*✏️ تغییرات:*\\n`;\n  \n  project.changes.forEach(change => {\n    msg += `\\n▫️ *${change.field}*\\n`;\n    msg += `   قبلی: ${change.oldValue || 'خالی'}\\n`;\n    msg += `   جدید: ${change.newValue || 'خالی'} ✨\\n`;\n  });\n  \n  msg += `\\n*📊 اطلاعات کامل فعلی:*\\n\\n`;\n  \n  if (project.mainAxis) {\n    msg += `*🎯 محور:* ${project.mainAxis}\\n`;\n  }\n  \n  if (project.status) {\n    msg += `*📊 وضعیت:* ${project.status}\\n`;\n  }\n  \n  if (project.deadline) {\n    msg += `*⏰ مهلت:* ${project.deadline}\\n`;\n  }\n  \n  msg += `\\n🔗 [مشاهده در سایت توانیر](https://satab.tavanir.org.ir/)\\n\\n`;\n  msg += `_🤖 به‌روزرسانی شماره ${toFaDigits(index + 1)} از ${toFaDigits(updatedProjects.length)}_`;\n  \n  messages.push({\n    json: {\n      send: true,\n      message: msg,\n      messageType: 'updated',\n      project: project,\n      index: messages.length\n    }\n  });\n});\n\nreturn messages;"
+      },
+      "id": "code-format-messages",
+      "name": "Format Telegram Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.send }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-should-send",
+      "name": "Should Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "wait-between-msgs",
+      "name": "Wait Between Messages",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        400
+      ],
+      "webhookId": "wait-tavanir-messages"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID_HERE",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "disable_web_page_preview": true
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        900,
+        400
+      ],
+      "id": "telegram-send",
+      "name": "Send to Telegram",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 12 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Companies List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Companies List": {
+      "main": [
+        [
+          {
+            "node": "Filter Khorasan Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Khorasan Companies": {
+      "main": [
+        [
+          {
+            "node": "Fetch Projects for Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Projects for Company": {
+      "main": [
+        [
+          {
+            "node": "Merge Company Info with Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Company Info with Response": {
+      "main": [
+        [
+          {
+            "node": "Parse Projects Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Projects Data": {
+      "main": [
+        [
+          {
+            "node": "Merge All Projects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Projects": {
+      "main": [
+        [
+          {
+            "node": "Detect Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Changes": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram Messages": {
+      "main": [
+        [
+          {
+            "node": "Should Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send?": {
+      "main": [
+        [
+          {
+            "node": "Wait Between Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Between Messages": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "tavanir-priorities-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "research-priorities-khorasan"
+  },
+  "id": "ResearchPrioritiesTavanirKhorasan",
+  "tags": [
+    "research",
+    "priorities",
+    "tavanir",
+    "khorasan",
+    "telegram",
+    "power-industry"
+  ]
+}
