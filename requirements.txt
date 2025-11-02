@@ -1,0 +1,31 @@
+# پکیج‌های Python برای Web Scraping و Social Media
+
+# === Web Scraping ===
+requests>=2.32.0
+beautifulsoup4>=4.14.0
+lxml>=6.0.0
+
+# === Telegram ===
+# دو کتابخانه محبوب - یکی را انتخاب کنید
+telethon>=1.36.0          # پیشرفته و کامل
+pyrogram>=2.0.106         # ساده‌تر و کاربرپسندتر
+
+# === Twitter/X ===
+snscrape>=0.7.0.20230622  # برای scraping (بدون API)
+tweepy>=4.14.0            # برای API رسمی
+
+# === Instagram ===
+instaloader>=4.12         # استفاده محتاطانه توصیه می‌شود
+
+# === YouTube ===
+google-api-python-client>=2.146.0
+google-auth>=2.35.0
+google-auth-httplib2>=0.2.0
+
+# === Reddit ===
+praw>=7.7.1
+
+# === ابزارهای کمکی ===
+python-dotenv>=1.0.0      # برای مدیریت environment variables
+aiohttp>=3.10.0           # برای async HTTP requests
+tqdm>=4.66.0              # progress bar
