@@ -74,26 +74,23 @@ getTargetTimeframe(shift) =>
 targetTF = tfShift == 0 ? timeframe.period : getTargetTimeframe(tfShift)
 
 // ════════════════════════════════════════════════════════════════════════════
-// MOVING AVERAGE FUNCTION
+// SSL CHANNEL CALCULATION FUNCTION
 // ════════════════════════════════════════════════════════════════════════════
 
-getMA(source, length, type) =>
-    switch type
-        "SMA" => ta.sma(source, length)
-        "EMA" => ta.ema(source, length)
-        "WMA" => ta.wma(source, length)
-        "HMA" => ta.hma(source, length)
-        => ta.sma(source, length)
+// Function to calculate SSL values - includes MA calculation inline
+calculateSSL(period, maTypeStr) =>
+    // Calculate MA based on type (inline to avoid scope issues)
+    maHigh = maTypeStr == "SMA" ? ta.sma(high, period) :
+             maTypeStr == "EMA" ? ta.ema(high, period) :
+             maTypeStr == "WMA" ? ta.wma(high, period) :
+             maTypeStr == "HMA" ? ta.hma(high, period) :
+             ta.sma(high, period)
 
-// ════════════════════════════════════════════════════════════════════════════
-// SSL CHANNEL CALCULATION
-// ════════════════════════════════════════════════════════════════════════════
-
-// Calculate SSL on specified timeframe
-[sslDown, sslUp, hlv] = request.security(syminfo.tickerid, targetTF, {
-    // Calculate MA of High and Low
-    maHigh = getMA(high, sslPeriod, maType)
-    maLow = getMA(low, sslPeriod, maType)
+    maLow = maTypeStr == "SMA" ? ta.sma(low, period) :
+            maTypeStr == "EMA" ? ta.ema(low, period) :
+            maTypeStr == "WMA" ? ta.wma(low, period) :
+            maTypeStr == "HMA" ? ta.hma(low, period) :
+            ta.sma(low, period)
 
     // Gann Hi-Lo Activator Logic
     var float hlv = na
@@ -108,7 +105,9 @@ getMA(source, length, type) =>
     sslUp = hlv < 0 ? maLow : maHigh
 
     [sslDown, sslUp, hlv]
-}, lookahead=barmerge.lookahead_off)
+
+// Calculate SSL on specified timeframe
+[sslDown, sslUp, hlv] = request.security(syminfo.tickerid, targetTF, calculateSSL(sslPeriod, maType))
 
 // ════════════════════════════════════════════════════════════════════════════
 // TREND DETECTION
