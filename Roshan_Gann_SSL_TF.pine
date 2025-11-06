@@ -1,49 +1,39 @@
 //@version=5
-indicator("Roshan Gann SSL TF", shorttitle="Gann SSL", overlay=true)
+indicator("Roshan Gann SSL", shorttitle="Gann SSL", overlay=true)
 
 // ════════════════════════════════════════════════════════════════════════════
 // INPUT SETTINGS
 // ════════════════════════════════════════════════════════════════════════════
 
-// SSL Channel Period
-sslPeriod = input.int(10, "SSL Period", minval=1, tooltip="Period for SSL Channel MA calculation")
+// SSL Period
+sslPeriod = input.int(10, "SSL Period", minval=1, tooltip="Period for SSL Channel calculation")
 
 // Timeframe Settings
-tfShift = input.int(0, "Timeframe Shift", minval=0, maxval=10, tooltip="0=Current TF, 1=Next TF (1min→5min), 2=Two steps up (1min→15min), etc.")
+tfShift = input.int(0, "Timeframe Shift", minval=0, maxval=10,
+     tooltip="0=Current TF, 1=Next TF (1min→5min), 2=Two steps up (1min→15min), etc.")
 
 // MA Type Selection
-maType = input.string("SMA", "MA Type", options=["SMA", "EMA", "WMA", "HMA"])
+maType = input.string("SMA", "MA Type", options=["SMA", "EMA", "WMA", "HMA"],
+     tooltip="Type of moving average for SSL calculation")
 
 // Visual Settings
-showArrows = input.bool(true, "Show Entry Signals", group="Visual")
-showLabels = input.bool(true, "Show Trend Labels", group="Visual")
-lineWidth = input.int(2, "Line Width", minval=1, maxval=5, group="Visual")
+showArrows = input.bool(true, "Show Buy/Sell Arrows", group="Visual Settings")
+showLabels = input.bool(false, "Show Buy/Sell Labels", group="Visual Settings")
+lineWidth = input.int(2, "Line Width", minval=1, maxval=5, group="Visual Settings")
 
 // Color Settings
-bullColor = input.color(color.new(color.green, 0), "Bull Color", group="Colors")
-bearColor = input.color(color.new(color.red, 0), "Bear Color", group="Colors")
-bullColorFill = input.color(color.new(color.green, 85), "Bull Fill", group="Colors")
-bearColorFill = input.color(color.new(color.red, 85), "Bear Fill", group="Colors")
+bullColor = input.color(color.new(#00ff00, 0), "Buy Color (Bull)", group="Colors")
+bearColor = input.color(color.new(#ff0000, 0), "Sell Color (Bear)", group="Colors")
 
 // ════════════════════════════════════════════════════════════════════════════
 // TIMEFRAME CALCULATION
 // ════════════════════════════════════════════════════════════════════════════
 
-// Function to calculate target timeframe based on shift
 getTargetTimeframe(shift) =>
     currentTF = timeframe.in_seconds()
 
     // Timeframe ladder in seconds
-    tfSeconds = array.new_int()
-    array.push(tfSeconds, 60)        // 1 minute
-    array.push(tfSeconds, 300)       // 5 minutes
-    array.push(tfSeconds, 900)       // 15 minutes
-    array.push(tfSeconds, 1800)      // 30 minutes
-    array.push(tfSeconds, 3600)      // 1 hour
-    array.push(tfSeconds, 14400)     // 4 hours
-    array.push(tfSeconds, 86400)     // 1 day
-    array.push(tfSeconds, 604800)    // 1 week
-    array.push(tfSeconds, 2592000)   // 1 month
+    tfSeconds = array.from(60, 300, 900, 1800, 3600, 14400, 86400, 604800, 2592000)
 
     // Find current position in ladder
     currentIndex = 0
@@ -65,8 +55,7 @@ getTargetTimeframe(shift) =>
          targetSeconds == 3600 ? "60" :
          targetSeconds == 14400 ? "240" :
          targetSeconds == 86400 ? "D" :
-         targetSeconds == 604800 ? "W" :
-         "M"
+         targetSeconds == 604800 ? "W" : "M"
 
     targetTF
 
@@ -74,12 +63,12 @@ getTargetTimeframe(shift) =>
 targetTF = tfShift == 0 ? timeframe.period : getTargetTimeframe(tfShift)
 
 // ════════════════════════════════════════════════════════════════════════════
-// SSL CHANNEL CALCULATION FUNCTION
+// SSL GANN CALCULATION
 // ════════════════════════════════════════════════════════════════════════════
 
-// Function to calculate SSL values - includes MA calculation inline
+// Function to calculate SSL values
 calculateSSL(period, maTypeStr) =>
-    // Calculate MA based on type (inline to avoid scope issues)
+    // Calculate MA based on type
     maHigh = maTypeStr == "SMA" ? ta.sma(high, period) :
              maTypeStr == "EMA" ? ta.ema(high, period) :
              maTypeStr == "WMA" ? ta.wma(high, period) :
@@ -93,112 +82,113 @@ calculateSSL(period, maTypeStr) =>
             ta.sma(low, period)
 
     // Gann Hi-Lo Activator Logic
-    var float hlv = na
+    var int trend = 0
 
     if close > maHigh
-        hlv := 1
+        trend := 1
     else if close < maLow
-        hlv := -1
+        trend := -1
 
-    // SSL Channel Lines
-    sslDown = hlv < 0 ? maHigh : maLow
-    sslUp = hlv < 0 ? maLow : maHigh
+    // SSL Channel Lines - Step-wise
+    sslDown = trend < 0 ? maHigh : maLow
+    sslUp = trend < 0 ? maLow : maHigh
 
-    [sslDown, sslUp, hlv]
+    [sslDown, sslUp, trend]
 
-// Calculate SSL on specified timeframe
-[sslDown, sslUp, hlv] = request.security(syminfo.tickerid, targetTF, calculateSSL(sslPeriod, maType))
+// Request data from target timeframe
+[sslDown, sslUp, trend] = request.security(syminfo.tickerid, targetTF,
+     calculateSSL(sslPeriod, maType))
 
 // ════════════════════════════════════════════════════════════════════════════
-// TREND DETECTION
+// SIGNAL DETECTION
 // ════════════════════════════════════════════════════════════════════════════
 
 // Detect trend changes
-isBullish = hlv == 1
-isBearish = hlv == -1
-trendChanged = hlv != hlv[1]
+isBullish = trend > 0
+isBearish = trend < 0
+trendChanged = trend != trend[1]
 
-// Detect specific signals
-bullSignal = trendChanged and isBullish
-bearSignal = trendChanged and isBearish
+// Buy and Sell signals
+buySignal = trendChanged and isBullish
+sellSignal = trendChanged and isBearish
 
 // ════════════════════════════════════════════════════════════════════════════
 // PLOTTING
 // ════════════════════════════════════════════════════════════════════════════
 
-// Plot SSL Lines
-plot(isBullish ? sslUp : na, "SSL Up", color=bullColor, linewidth=lineWidth, style=plot.style_line)
-plot(isBearish ? sslDown : na, "SSL Down", color=bearColor, linewidth=lineWidth, style=plot.style_line)
-plot(isBullish ? sslDown : na, "SSL Down (Bull)", color=bullColor, linewidth=1, style=plot.style_line)
-plot(isBearish ? sslUp : na, "SSL Up (Bear)", color=bearColor, linewidth=1, style=plot.style_line)
+// Plot SSL Lines as STEPLINE (پله‌ای)
+plot(isBullish ? sslUp : na, "SSL Buy Line", color=bullColor,
+     linewidth=lineWidth, style=plot.style_stepline)
+plot(isBullish ? sslDown : na, "SSL Buy Support", color=bullColor,
+     linewidth=1, style=plot.style_stepline)
 
-// Fill between lines
-upPlot = plot(sslUp, color=na, display=display.none)
-downPlot = plot(sslDown, color=na, display=display.none)
-fill(upPlot, downPlot, color=isBullish ? bullColorFill : bearColorFill, title="SSL Fill")
+plot(isBearish ? sslDown : na, "SSL Sell Line", color=bearColor,
+     linewidth=lineWidth, style=plot.style_stepline)
+plot(isBearish ? sslUp : na, "SSL Sell Resistance", color=bearColor,
+     linewidth=1, style=plot.style_stepline)
 
-// Plot Entry Signals
+// Plot Entry Arrows (optional)
 if showArrows
-    plotshape(bullSignal, "Buy Signal", shape.triangleup, location.belowbar,
-         color=bullColor, size=size.small)
-    plotshape(bearSignal, "Sell Signal", shape.triangledown, location.abovebar,
-         color=bearColor, size=size.small)
+    plotshape(buySignal, "Buy Arrow", shape.triangleup, location.belowbar,
+         color=bullColor, size=size.small, text="BUY")
+    plotshape(sellSignal, "Sell Arrow", shape.triangledown, location.abovebar,
+         color=bearColor, size=size.small, text="SELL")
 
-// Show Labels
-if showLabels
-    if bullSignal
-        label.new(bar_index, low, "BUY", style=label.style_label_up,
-             color=bullColor, textcolor=color.white, size=size.small)
-    if bearSignal
-        label.new(bar_index, high, "SELL", style=label.style_label_down,
-             color=bearColor, textcolor=color.white, size=size.small)
+// Plot Labels (optional)
+if showLabels and buySignal
+    label.new(bar_index, low, "BUY", style=label.style_label_up,
+         color=bullColor, textcolor=color.white, size=size.normal)
+
+if showLabels and sellSignal
+    label.new(bar_index, high, "SELL", style=label.style_label_down,
+         color=bearColor, textcolor=color.white, size=size.normal)
 
 // ════════════════════════════════════════════════════════════════════════════
 // ALERTS
 // ════════════════════════════════════════════════════════════════════════════
 
-// Alert Conditions
-alertcondition(bullSignal, title="Gann SSL Buy",
-     message="Gann SSL: Buy Signal on {{ticker}} at {{close}}")
-alertcondition(bearSignal, title="Gann SSL Sell",
-     message="Gann SSL: Sell Signal on {{ticker}} at {{close}}")
+alertcondition(buySignal, title="Gann SSL Buy Signal",
+     message="Gann SSL: BUY Signal on {{ticker}} at {{close}}")
+
+alertcondition(sellSignal, title="Gann SSL Sell Signal",
+     message="Gann SSL: SELL Signal on {{ticker}} at {{close}}")
+
 alertcondition(trendChanged, title="Gann SSL Trend Change",
      message="Gann SSL: Trend Changed on {{ticker}}")
 
 // ════════════════════════════════════════════════════════════════════════════
-// BACKGROUND COLOR (Optional)
+// INFO TABLE
 // ════════════════════════════════════════════════════════════════════════════
 
-showBG = input.bool(false, "Show Background Color", group="Visual")
-bgcolor(showBG and isBullish ? color.new(bullColor, 95) :
-     showBG and isBearish ? color.new(bearColor, 95) : na)
-
-// ════════════════════════════════════════════════════════════════════════════
-// INFO TABLE (Display current timeframe and settings)
-// ════════════════════════════════════════════════════════════════════════════
-
-showTable = input.bool(true, "Show Info Table", group="Visual")
+showTable = input.bool(true, "Show Info Panel", group="Visual Settings")
 
 if showTable and barstate.islast
     var table infoTable = table.new(position.top_right, 2, 4,
          border_width=1, border_color=color.gray, frame_color=color.gray, frame_width=1)
 
-    table.cell(infoTable, 0, 0, "Gann SSL Settings", bgcolor=color.new(color.gray, 70),
-         text_color=color.white, text_size=size.small)
+    // Header
+    table.cell(infoTable, 0, 0, "Roshan Gann SSL", bgcolor=color.new(color.gray, 70),
+         text_color=color.white, text_size=size.normal)
     table.merge_cells(infoTable, 0, 0, 1, 0)
 
+    // Period
     table.cell(infoTable, 0, 1, "Period:", text_halign=text.align_left,
          bgcolor=color.new(color.gray, 90), text_size=size.small)
     table.cell(infoTable, 1, 1, str.tostring(sslPeriod), text_halign=text.align_right,
          bgcolor=color.new(color.gray, 90), text_size=size.small)
 
+    // Timeframe
     table.cell(infoTable, 0, 2, "Timeframe:", text_halign=text.align_left,
          bgcolor=color.new(color.gray, 90), text_size=size.small)
     table.cell(infoTable, 1, 2, targetTF, text_halign=text.align_right,
          bgcolor=color.new(color.gray, 90), text_size=size.small)
 
-    table.cell(infoTable, 0, 3, "Trend:", text_halign=text.align_left,
+    // Trend
+    trendText = isBullish ? "BUY ▲" : isBearish ? "SELL ▼" : "NEUTRAL"
+    trendColor = isBullish ? bullColor : isBearish ? bearColor : color.gray
+
+    table.cell(infoTable, 0, 3, "Signal:", text_halign=text.align_left,
          bgcolor=color.new(color.gray, 90), text_size=size.small)
-    table.cell(infoTable, 1, 3, isBullish ? "BULL" : "BEAR",
-         text_halign=text.align_right, text_color=isBullish ? bullColor : bearColor,
-         bgcolor=color.new(color.gray, 90), text_size=size.small)
+    table.cell(infoTable, 1, 3, trendText, text_halign=text.align_right,
+         text_color=trendColor, bgcolor=color.new(color.gray, 90),
+         text_size=size.small)
